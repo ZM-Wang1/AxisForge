@@ -68,16 +68,16 @@ class URcontrol(Node):
 
         # Set up subscribers
         self.duration_sub = self.create_subscription(
-            Float32, f"/ur10e/movement_duration", self.get_duration, reliable_qos
+            Float32, f"/ur16e/movement_duration", self.get_duration, reliable_qos
         )
         self.joint_states_sub = self.create_subscription(
             JointState, "/joint_states", self.get_current_joint_states, besteffort_qos
         )
         self.xyz_pose_sub = self.create_subscription(
-            Twist, f"/ur10e/point_pose", self.get_XYZ_pos, reliable_qos
+            Twist, f"/ur16e/point_pose", self.get_XYZ_pos, reliable_qos
         )
         self.joint_pose_sub = self.create_subscription(
-            Float32MultiArray, f"/ur10e/target_joint_pose", self.get_joint_pos, 10
+            Float32MultiArray, f"/ur16e/target_joint_pose", self.get_joint_pos, 10
         )
         self.toggle_log_sub = self.create_subscription(
             Bool, "/kb/toggle_log", self.toggle_log_callback, 10
@@ -97,13 +97,13 @@ class URcontrol(Node):
             JointTrajectory, "/scaled_joint_trajectory_controller/joint_trajectory", 10
         )
         self.goal_pub_ = self.create_publisher(
-            Float32MultiArray, f"/ur10e/joint_goal", 10
+            Float32MultiArray, f"/ur16e/joint_goal", 10
         )
         self.calc_pose_pub_ = self.create_publisher(
-            Float32MultiArray, f"/ur10e/calculated_xyz", 10
+            Float32MultiArray, f"/ur16e/calculated_xyz", 10
         )
-        self.robot_info_pub_ = self.create_publisher(String, f"/ur10e/robot_log", 10)
-        self.is_moving_pub_ = self.create_publisher(Bool, f"/ur10e/is_moving", 10)
+        self.robot_info_pub_ = self.create_publisher(String, f"/ur16e/robot_log", 10)
+        self.is_moving_pub_ = self.create_publisher(Bool, f"/ur16e/is_moving", 10)
 
         self.is_moving_timer = self.create_timer(0.002, self.publish_is_moving)
 
@@ -125,7 +125,7 @@ class URcontrol(Node):
 
     def get_duration(self, data):
         """
-        Callback function for receiving duration from "/ur10e/movement_duration" topic.
+        Callback function for receiving duration from "/ur16e/movement_duration" topic.
         """
         self.duration = data.data
 

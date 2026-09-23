@@ -1,0 +1,36 @@
+line_print_test:
+  ros__parameters:
+    # Print one line per run; edit this file and rerun to apply changes. Keep .0 for floating-point parameters.
+    line_length_mm: 80.0                  # Line length, mm
+    nozzle_rpy_deg: [180.0, 15.0, 90.0]    # Absolute roll/pitch/yaw of tool0, degrees (RPY zyx)
+    extrusion_speed_steps_s: 10000.0       # Motor steps/s; 0.0 follows the trajectory without extrusion
+    print_speed_mm_s: 5.0                 # Nominal average printing speed, mm/s
+
+    # The starting point is the nozzle tip position in the Base frame. The values below are examples from the old launch file; measure the actual position.
+    start_xyz_mm: [-629.35, -333.62, 98.13]
+    line_direction_deg: 90.0               # Direction in the Base XY plane: 0=+X, 90=+Y
+    tcp_offset_mm: [-65.73, 3.56, 99.38]       # Actual offset to the nozzle tip in the tool0 frame
+    # A zero offset plans for tool0; enter the measured offset to compensate for the nozzle tip position when tilted.
+    clearance_mm: 10.0                   # Clearance above the starting point / lift at the end, along Base +Z
+    travel_speed_mm_s: 5.0                # Lowering/lifting speed
+    approach_duration_s: 8.0              # Duration from the current joint configuration to above the starting point, s
+    waypoint_spacing_mm: 1.0              # Path sampling interval; interpolation error is checked separately
+    dry_run: false                        # true performs a dry run only; false sends actual motion commands
+
+    # Advanced parameters: the dry-run seed does not represent the actual robot configuration; hardware execution always reads /joint_states.
+    dry_run_seed_deg: [-145.0, -128.0, -94.0, -47.0, 90.0, 35.0]
+    joint_limits_deg: [360.0, 360.0, 180.0, 360.0, 360.0, 360.0]
+    max_joint_step_deg: 20.0
+    max_joint_speed_deg_s: 30.0
+    max_joint_acceleration_deg_s2: 60.0
+    min_link_z_mm: -234.8                  # Link origin height check, not full collision detection
+    path_tolerance_mm: 0.2                # TCP trajectory error checked by oversampling the model
+    orientation_tolerance_deg: 0.2
+    joint_goal_tolerance_rad: 0.001
+    start_tolerance_deg: 1.0
+    startup_timeout_s: 10.0
+    feedback_timeout_s: 1.0
+    stall_timeout_s: 2.0
+    execution_timeout_factor: 3.0         # Multiplier for the nominal duration, with stall_timeout_s added
+    cancel_timeout_s: 3.0
+    progress_threshold_mm: 0.02           # Threshold for detecting progress; reduce accordingly for low-speed tests

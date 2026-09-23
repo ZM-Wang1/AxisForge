@@ -58,9 +58,9 @@ git clone git@github.com:AbdulShahzeb/ros-3d-printer-ur.git
 pip install -r requirements.txt
 ```
 
-### 5. Custom UR10e Models Installation
+### 5. Custom UR16e Models Installation
 
-The Robotics Toolbox doesn't include UR e-series models by default. Install custom models:
+Install the custom UR16e DH and URDF models into the project's `.venv`:
 ```bash
 chmod +x install_ur_models.sh
 ./install_ur_models.sh
@@ -80,25 +80,70 @@ For Arduino Portenta H7:
 
 ### 8. Build This Package
 ```bash
-cd ~/ros2_ws/
-colcon build --symlink-install
+cd /path/to/AxisForge
+source /opt/ros/humble/setup.bash
+source .venv/bin/activate
+# Build entry points with the Python environment containing the UR16e models.
+.venv/bin/python /usr/bin/colcon build --base-paths src --packages-select move_robot
 source install/setup.bash
 ```
 
 ### Usage
-```bash
-# First time setup (only do this once)
-cd ~/ros2_ws/src/ros-3d-printer-ur
-cp local/ur_ros2_driver.sh local/ur10e_calibration.yaml local/microros.sh ~
-cd ~
-chmod +x ur_ros2_driver.sh && chmod +x microros.sh
+Run the scripts from `local/` so they can locate the calibration file and the
+project's micro-ROS workspace. Keep all three terminals open.
 
-# Terminal 1: Start UR driver
+```bash
+# Terminal 1: Start the UR16e driver
+cd /path/to/AxisForge/local
 ./ur_ros2_driver.sh
 
-# Terminal 2: Start micro-ROS agent
+# Terminal 2: Start the serial bridge to the Portenta extruder
+cd /path/to/AxisForge/local
 ./microros.sh
 
 # Terminal 3: Launch control system
+cd /path/to/AxisForge
+source /opt/ros/humble/setup.bash
+source .venv/bin/activate
+source install/setup.bash
 ros2 launch move_robot ur_master.launch.py
 ```
+
+### Straight-Line Printing Test with a Fixed Nozzle Angle
+
+Each run prints one straight line with a fixed end-effector orientation. Parameters are configured in
+[`src/move_robot/config/line_print_test.yaml`](src/move_robot/config/line_print_test.yaml).
+Edit the YAML file and rerun the test to apply changes. This test uses a separate entry point; do not run
+`ur_master.launch.py`, the G-code executor, or other trajectory-sending nodes at the same time.
+
+Rebuild before using the new entry point for the first time:
+
+```bash
+cd /path/to/AxisForge
+source /opt/ros/humble/setup.bash
+source .venv/bin/activate
+.venv/bin/python /usr/bin/colcon build --base-paths src --packages-select move_robot
+source install/setup.bash
+
+# Default dry_run: true: plan using the reference joint configuration in the YAML file, without sending motion or extrusion commands.
+# Specify the source YAML file so future parameter changes do not require rebuilding.
+ros2 launch move_robot line_print_test.launch.py \
+  config:="$PWD/src/move_robot/config/line_print_test.yaml"
+```
+
+Common parameters are listed below. Keep `.0` for floating-point parameters, and provide exactly three numbers for 3D parameters:
+
+| Parameter | Units / Meaning | Example |
+| --- | --- | --- |
+| `line_length_mm` | Line length, mm | `30.0` |
+| `nozzle_rpy_deg` | Absolute roll, pitch, and yaw of tool0, degrees | `[180.0, 0.0, 90.0]` |
+| `extrusion_speed_steps_s` | Extruder motor speed, steps/s | `200.0`; `0.0` follows the trajectory without extrusion |
+| `print_speed_mm_s` | Nominal average printing speed, mm/s | `5.0` |
+| `start_xyz_mm` | Nozzle tip starting position, XYZ in the robot Base frame, mm | Enter the measured position |
+| `line_direction_deg` | Printing direction in the Base XY plane | `0.0` along +X, `90.0` along +Y |
+| `tcp_offset_mm` | Offset from tool0 to the nozzle tip in the tool0 frame, mm | Enter the measured mounting offset |
+| `clearance_mm` | Lift distance above the starting point and after printing, along Base +Z | `10.0` |
+| `travel_speed_mm_s` | Lowering and lifting speed, mm/s | `5.0` |
+| `approach_duration_s` | Duration of the joint motion from the current configuration to above the starting point, s | `8.0` |
+| `waypoint_spacing_mm` | Cartesian path sampling interval, mm | `1.0` |
+| `dry_run` | `true` plans only; `false` executes one test | Default: `true` |

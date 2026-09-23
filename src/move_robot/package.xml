@@ -12,6 +12,10 @@
   <depend>trajectory_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>action_msgs</depend>
+  <depend>control_msgs</depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
   <depend>time</depend>
 
   <exec_depend>ros2launch</exec_depend>

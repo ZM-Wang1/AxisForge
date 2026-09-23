@@ -53,3 +53,5 @@ Thumbs.db
 /.vscode
 /src/.vscode
 
+# Local micro-ROS Agent workspace (sources and build artifacts)
+/.micro_ros_ws/

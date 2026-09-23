@@ -36,15 +36,15 @@ class GCodeInterpreter(Node):
         super().__init__("gcode_interpreter")
 
         # Publishers
-        self.pose_pub_ = self.create_publisher(Twist, "ur10e/point_pose", reliable_qos)
+        self.pose_pub_ = self.create_publisher(Twist, "ur16e/point_pose", reliable_qos)
         self.duration_pub_ = self.create_publisher(
-            Float32, f"/ur10e/movement_duration", reliable_qos
+            Float32, f"/ur16e/movement_duration", reliable_qos
         )
         self.stepper_pub_ = self.create_publisher(Float32, "/stepper/speed", reliable_qos)
 
         # Subscribers
         self.movement_sub = self.create_subscription(
-            Bool, "ur10e/is_moving", self.robot_moving_callback, besteffort_qos
+            Bool, "ur16e/is_moving", self.robot_moving_callback, besteffort_qos
         )
         self.toggle_log_sub = self.create_subscription(
             Bool, "/kb/toggle_log", self.toggle_log_callback, 10

@@ -39,7 +39,7 @@ def generate_launch_description():
         output='screen',
         parameters=[
             {
-                # Offsets Changed offset of x from -878 -> -578.0 due to smaller robot than ur10e
+                # UR16e print-bed offsets in millimetres, relative to robot Base.
                 'origin_at_center': True,
                 'x_offset': -778.0,
                 'y_offset': -362.0,
