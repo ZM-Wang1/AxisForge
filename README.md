@@ -125,10 +125,10 @@ source .venv/bin/activate
 .venv/bin/python /usr/bin/colcon build --base-paths src --packages-select move_robot
 source install/setup.bash
 
-# Default dry_run: true: plan using the reference joint configuration in the YAML file, without sending motion or extrusion commands.
-# Specify the source YAML file so future parameter changes do not require rebuilding.
-ros2 launch move_robot line_print_test.launch.py \
-  config:="$PWD/src/move_robot/config/line_print_test.yaml"
+# Explicit preview: the source YAML may contain dry_run: false from hardware tests.
+# Parameter-only edits do not require rebuilding when this source YAML is used.
+ros2 run move_robot line_print_test --ros-args \
+  --params-file src/move_robot/config/line_print_test.yaml -p dry_run:=true
 ```
 
 Common parameters are listed below. Keep `.0` for floating-point parameters, and provide exactly three numbers for 3D parameters:
@@ -137,7 +137,7 @@ Common parameters are listed below. Keep `.0` for floating-point parameters, and
 | --- | --- | --- |
 | `line_length_mm` | Line length, mm | `30.0` |
 | `nozzle_rpy_deg` | Absolute roll, pitch, and yaw of tool0, degrees | `[180.0, 0.0, 90.0]` |
-| `extrusion_speed_steps_s` | Extruder motor speed, steps/s | `200.0`; `0.0` follows the trajectory without extrusion |
+| `filament_per_mm` | Filament mm per mm of printed path | `0.20` is an example; `0.0` disables extrusion |
 | `print_speed_mm_s` | Nominal average printing speed, mm/s | `5.0` |
 | `start_xyz_mm` | Nozzle tip starting position, XYZ in the robot Base frame, mm | Enter the measured position |
 | `line_direction_deg` | Printing direction in the Base XY plane | `0.0` along +X, `90.0` along +Y |

@@ -7,6 +7,8 @@ import numpy as np
 import roboticstoolbox as rtb
 from spatialmath import SE3
 
+from move_robot.extrusion_calibration import filament_speed_to_steps_s
+
 
 JOINT_NAMES = (
     'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
@@ -22,7 +24,7 @@ class LinePrintConfig:
     line_direction_deg: float = 0.0
     start_xyz_mm: tuple = (-660.5, -244.5, 193.62)
     nozzle_rpy_deg: tuple = (180.0, 0.0, 90.0)
-    extrusion_speed_steps_s: float = 200.0
+    filament_per_mm: float = 0.20
     print_speed_mm_s: float = 5.0
     travel_speed_mm_s: float = 5.0
     approach_duration_s: float = 8.0
@@ -46,6 +48,9 @@ class LinePrintConfig:
     execution_timeout_factor: float = 3.0
     cancel_timeout_s: float = 3.0
     progress_threshold_mm: float = 0.02
+    extrusion_smoothing_s: float = 0.10
+    extrusion_update_period_s: float = 0.05
+    extrusion_feedback_timeout_s: float = 0.25
 
     def validate(self):
         """Reject invalid values before constructing a trajectory or publisher."""
@@ -68,9 +73,9 @@ class LinePrintConfig:
                     raise ValueError(f'{name} must contain {vectors[name]} numbers')
             elif array.shape != ():
                 raise ValueError(f'{name} must be a number')
-            elif name == 'extrusion_speed_steps_s':
-                if not 0 <= value <= 64000:
-                    raise ValueError('extrusion_speed_steps_s must be in [0, 64000]')
+            elif name == 'filament_per_mm':
+                if value < 0:
+                    raise ValueError('filament_per_mm must be nonnegative (0 disables extrusion)')
             elif name not in unrestricted and value <= 0:
                 raise ValueError(f'{name} must be positive')
         if np.any(np.asarray(self.joint_limits_deg) <= 0):
@@ -79,6 +84,9 @@ class LinePrintConfig:
             raise ValueError('execution_timeout_factor must be >= 1')
         if self.progress_threshold_mm >= self.line_length_mm:
             raise ValueError('progress_threshold_mm must be smaller than line_length_mm')
+        if self.extrusion_update_period_s > self.extrusion_feedback_timeout_s:
+            raise ValueError('Extrusion update period must not exceed its feedback timeout')
+        filament_speed_to_steps_s(self.print_speed_mm_s * self.filament_per_mm)
         for distance in (self.line_length_mm, self.clearance_mm):
             if distance / self.waypoint_spacing_mm > 10000:
                 raise ValueError('Path exceeds 10000 intervals; increase waypoint_spacing_mm')

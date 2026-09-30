@@ -17,6 +17,10 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32
 from trajectory_msgs.msg import JointTrajectoryPoint
 
+from move_robot.extrusion_calibration import (
+    filament_speed_to_steps_s, outside_calibration_range,
+)
+from move_robot.line_print_extrusion import ProgressExtrusion
 from move_robot.line_print_path import (
     JOINT_NAMES, LinePrintConfig, LinePrintPlanner, duration_parts,
 )
@@ -35,6 +39,12 @@ class LinePrintTest(Node):
             if isinstance(default, tuple):
                 default = list(default)
             values[field.name] = self.declare_parameter(field.name, default).value
+        # Explicitly reject old YAML/CLI overrides instead of silently ignoring them.
+        legacy_speed = self.declare_parameter('extrusion_speed_steps_s', -1.0).value
+        if legacy_speed != -1.0:
+            raise ValueError(
+                'extrusion_speed_steps_s was replaced by filament_per_mm; update YAML'
+            )
         self.config = LinePrintConfig(**values)
         self.config.validate()
         self.planner = LinePrintPlanner(self.config)
@@ -51,6 +61,7 @@ class LinePrintTest(Node):
         self.progress_received = None
         self.at_print_end = False
         self.speed = 0.0
+        self.reset_extrusion()
         self.speed_publisher = None
         self.action = None
         # Dry-run has no command publishers or action client, even on shutdown.
@@ -109,11 +120,42 @@ class LinePrintTest(Node):
             self.speed_publisher.publish(Float32(data=float(speed)))
             self.speed = speed
 
+    def reset_extrusion(self):
+        """Start each phase with no velocity history or pending filament feed."""
+        self.extrusion_sync = ProgressExtrusion(
+            self.config.filament_per_mm, self.config.line_length_mm,
+            self.config.extrusion_smoothing_s,
+        )
+        self.last_extrusion_update = None
+        self.calibration_warned = False
+
+    def update_print_extrusion(self, now):
+        """Throttle positive commands; deliver zero immediately on a measured stop."""
+        speed = self.extrusion_sync.steps_s
+        if self.progress_received is None or self.at_print_end:
+            speed = 0.0
+        if (speed == 0 or self.last_extrusion_update is None or
+                now - self.last_extrusion_update >= self.config.extrusion_update_period_s):
+            self.set_extrusion(speed)
+            self.last_extrusion_update = now
+            feed = self.extrusion_sync.filament_speed_mm_s
+            if speed > 0 and not self.calibration_warned and outside_calibration_range(feed):
+                self.get_logger().warn(
+                    f'Filament feed {feed:.4f} mm/s is outside the calibrated '
+                    '[0.91, 10.161] mm/s range; using the nearest endpoint steps/mm.'
+                )
+                self.calibration_warned = True
+
     def on_feedback(self, message, printing):
         """Track actual nozzle progress during the printing action."""
         feedback = message.feedback
         self.feedback_received = time.monotonic()
         if not printing or self.aborting:
+            return
+        stamp = feedback.header.stamp.sec * 1_000_000_000 + feedback.header.stamp.nanosec
+        age = (self.get_clock().now().nanoseconds - stamp) / 1e9
+        if stamp == 0 or abs(age) > self.config.extrusion_feedback_timeout_s:
+            self.feedback_error = 'Extrusion feedback timestamp is missing or stale'
             return
         mapping = dict(zip(feedback.joint_names, feedback.actual.positions))
         if not all(name in mapping for name in JOINT_NAMES):
@@ -125,6 +167,11 @@ class LinePrintTest(Node):
             return
         position = self.planner.nozzle_position(joints)
         progress = float((position - self.planner.start) @ self.planner.direction)
+        try:
+            self.extrusion_sync.update(progress, stamp / 1e9)
+        except ValueError as error:
+            self.feedback_error = str(error)
+            return
         if progress > self.print_progress + self.config.progress_threshold_mm:
             self.print_progress = progress
             self.progress_received = self.feedback_received
@@ -161,6 +208,7 @@ class LinePrintTest(Node):
         if error > self.config.start_tolerance_deg:
             raise RuntimeError(f'Robot moved away from planned start ({error:.3f} deg)')
         self.set_extrusion(0.0, force=True)
+        self.reset_extrusion()
         self.feedback_received = None
         self.feedback_error = None
         self.print_progress = 0.0
@@ -201,18 +249,17 @@ class LinePrintTest(Node):
             if now > deadline:
                 raise RuntimeError(f'{motion.name}: execution timed out')
             if printing:
+                if now - last_feedback > self.config.extrusion_feedback_timeout_s:
+                    raise RuntimeError('Extrusion feedback timed out')
                 last_progress = (
                     self.progress_received if self.progress_received is not None else started
                 )
                 if not self.at_print_end and now - last_progress > self.config.stall_timeout_s:
                     raise RuntimeError('Print motion stalled; extrusion stopped')
-                if (self.config.extrusion_speed_steps_s > 0 and
+                if (self.config.filament_per_mm > 0 and
                         self.speed_publisher.get_subscription_count() == 0):
                     raise RuntimeError('Extruder subscriber disconnected')
-                if self.progress_received is not None and not self.at_print_end:
-                    self.set_extrusion(self.config.extrusion_speed_steps_s)
-                else:
-                    self.set_extrusion(0.0)
+                self.update_print_extrusion(now)
             rclpy.spin_once(self, timeout_sec=0.01)
         self.set_extrusion(0.0, force=True)
         response = self.result_future.result()
@@ -252,8 +299,20 @@ class LinePrintTest(Node):
         motions = self.planner.plan(seed)
         self.get_logger().info(
             f'Nozzle XYZ mm: {self.planner.start.tolist()} -> {self.planner.end.tolist()}; '
-            f'RPY deg={list(cfg.nozzle_rpy_deg)}, extrusion={cfg.extrusion_speed_steps_s} steps/s'
+            f'RPY deg={list(cfg.nozzle_rpy_deg)}, filament_per_mm={cfg.filament_per_mm}'
         )
+        nominal_feed = cfg.print_speed_mm_s * cfg.filament_per_mm
+        nominal_steps = filament_speed_to_steps_s(nominal_feed)
+        self.get_logger().info(
+            f'Target filament={cfg.line_length_mm * cfg.filament_per_mm:.4f} mm; '
+            f'nominal feed={nominal_feed:.4f} mm/s, {nominal_steps:.2f} steps/s. '
+            'Execution follows measured TCP speed; this is not measured material output.'
+        )
+        if outside_calibration_range(nominal_feed):
+            self.get_logger().warn(
+                'Nominal filament feed is outside [0.91, 10.161] mm/s; '
+                'endpoint calibration will be used. Verify material output.'
+            )
         self.get_logger().info(
             'Planned phases: ' + ', '.join(f'{m.name}={m.times[-1]:.3f}s' for m in motions)
         )
@@ -263,7 +322,7 @@ class LinePrintTest(Node):
         self.wait_until(
             self.action.server_is_ready, cfg.startup_timeout_s, 'trajectory action server',
         )
-        if cfg.extrusion_speed_steps_s > 0:
+        if cfg.filament_per_mm > 0:
             self.wait_until(
                 lambda: self.speed_publisher.get_subscription_count() > 0,
                 cfg.startup_timeout_s, 'extruder subscriber on /stepper/speed',

@@ -3,7 +3,9 @@ line_print_test:
     # Print one line per run; edit this file and rerun to apply changes. Keep .0 for floating-point parameters.
     line_length_mm: 80.0                  # Line length, mm
     nozzle_rpy_deg: [180.0, 15.0, 90.0]    # Absolute roll/pitch/yaw of tool0, degrees (RPY zyx)
-    extrusion_speed_steps_s: 10000.0       # Motor steps/s; 0.0 follows the trajectory without extrusion
+    filament_per_mm: 0.20                # Filament mm per path mm; EXAMPLE, tune for your process. 0.0 disables extrusion.
+    # Target filament = line_length_mm * filament_per_mm (80 * 0.20 = 16 mm).
+    # Actual TCP speed sets filament mm/s; shared G-code calibration converts it to steps/s.
     print_speed_mm_s: 5.0                 # Nominal average printing speed, mm/s
 
     # The starting point is the nozzle tip position in the Base frame. The values below are examples from the old launch file; measure the actual position.
@@ -34,3 +36,6 @@ line_print_test:
     execution_timeout_factor: 3.0         # Multiplier for the nominal duration, with stall_timeout_s added
     cancel_timeout_s: 3.0
     progress_threshold_mm: 0.02           # Threshold for detecting progress; reduce accordingly for low-speed tests
+    extrusion_smoothing_s: 0.10          # Short averaging window for measured TCP speed
+    extrusion_update_period_s: 0.05      # Positive speed commands at most 20 Hz; stops are immediate
+    extrusion_feedback_timeout_s: 0.25   # Abort on stale printing feedback, seconds

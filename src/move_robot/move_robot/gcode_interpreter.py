@@ -10,7 +10,8 @@ import math
 import os
 from time import sleep, time
 from enum import Enum, auto
-import numpy as np
+
+from move_robot.extrusion_calibration import steps_per_mm
 
 
 class PositioningState(Enum):
@@ -611,29 +612,7 @@ class GCodeInterpreter(Node):
 
     def steps_per_mm(self, extrusion_speed_mmps):
         """Return calibrated steps/mm based on extrusion speed."""
-        if extrusion_speed_mmps <= 0:
-            return 221.43
-
-        # Calibration data: (estimated_speed_mmps, actual_steps_per_mm)
-        speeds = np.array(
-            [0.91, 1.129, 2.258, 3.387, 4.516, 5.645, 6.774, 7.9, 9.032, 10.161]
-        )
-        spms = np.array(
-            [
-                196.83,
-                201.30,
-                201.30,
-                212.91,
-                221.43,
-                249.52,
-                250.68,
-                288.82,
-                288.82,
-                301.95,
-            ]
-        )
-
-        return float(np.interp(extrusion_speed_mmps, speeds, spms))
+        return steps_per_mm(extrusion_speed_mmps)
 
     def watchdog_check(self):
         """Check if robot has stopped moving unexpectedly."""
