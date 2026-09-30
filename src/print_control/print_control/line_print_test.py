@@ -17,11 +17,11 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32
 from trajectory_msgs.msg import JointTrajectoryPoint
 
-from move_robot.extrusion_calibration import (
+from extrusion_control.extrusion_calibration import (
     filament_speed_to_steps_s, outside_calibration_range,
 )
-from move_robot.line_print_extrusion import ProgressExtrusion
-from move_robot.line_print_path import (
+from extrusion_control.line_print_extrusion import ProgressExtrusion
+from print_control.line_print_path import (
     JOINT_NAMES, LinePrintConfig, LinePrintPlanner, duration_parts,
 )
 

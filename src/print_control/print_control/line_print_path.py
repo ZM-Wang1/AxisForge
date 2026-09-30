@@ -7,7 +7,7 @@ import numpy as np
 import roboticstoolbox as rtb
 from spatialmath import SE3
 
-from move_robot.extrusion_calibration import filament_speed_to_steps_s
+from extrusion_control.extrusion_calibration import filament_speed_to_steps_s
 
 
 JOINT_NAMES = (

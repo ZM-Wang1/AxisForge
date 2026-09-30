@@ -11,7 +11,7 @@ import os
 from time import sleep, time
 from enum import Enum, auto
 
-from move_robot.extrusion_calibration import steps_per_mm
+from extrusion_control.extrusion_calibration import steps_per_mm
 
 
 class PositioningState(Enum):

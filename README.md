@@ -1,3 +1,18 @@
+# AxisForge
+
+## Repository Layout
+
+```text
+src/
+├── ur_control/          # UR robot control; custom Toolbox models in models/
+├── print_control/       # G-code assets, paths, print execution and keyboard control
+├── extrusion_control/   # Extruder calibration and progress-based extrusion
+├── axisforge_bringup/   # launch/ and config/, including robot calibration YAML
+└── diagnostics/         # Robot and Arduino latency ROS nodes
+firmware/               # Arduino sketches for extrusion and latency measurements
+STL/                    # Printable example meshes
+```
+
 ## Installation and Setup
 
 This guide provides step-by-step instructions for setting up the complete software environment.
@@ -54,7 +69,8 @@ sudo apt install python3-dev python3-pip
 # Install required packages from requirements.txt
 mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
-git clone git@github.com:AbdulShahzeb/ros-3d-printer-ur.git
+git clone https://github.com/ZM-Wang1/AxisForge.git
+cd AxisForge
 pip install -r requirements.txt
 ```
 
@@ -62,8 +78,7 @@ pip install -r requirements.txt
 
 Install the custom UR16e DH and URDF models into the project's `.venv`:
 ```bash
-chmod +x install_ur_models.sh
-./install_ur_models.sh
+./scripts/install_ur_models.sh
 ```
 
 ### 6. Micro-ROS Setup
@@ -75,44 +90,43 @@ For Arduino Portenta H7:
 3. Install the `AccelStepper` library via Library Manager
 4. Download latest `micro_ros_arduino` for Humble from [Releases](https://github.com/micro-ROS/micro_ros_arduino/releases)
 5. Upload the downloaded ZIP to the IDE using `Sketch -> Include library -> Add .ZIP Library...`
-6. Upload `DRV8825_microros.ino` to Portenta H7
+6. Upload `firmware/DRV8825_microros/DRV8825_microros.ino` to Portenta H7
 7. Install micro-ROS agent on PC: https://github.com/micro-ROS/micro_ros_setup
 
-### 8. Build This Package
+### 7. Build the Workspace
+
 ```bash
 cd /path/to/AxisForge
 source /opt/ros/humble/setup.bash
 source .venv/bin/activate
 # Build entry points with the Python environment containing the UR16e models.
-.venv/bin/python /usr/bin/colcon build --base-paths src --packages-select move_robot
+.venv/bin/python /usr/bin/colcon build --base-paths src
 source install/setup.bash
 ```
 
 ### Usage
-Run the scripts from `local/` so they can locate the calibration file and the
-project's micro-ROS workspace. Keep all three terminals open.
 
 ```bash
 # Terminal 1: Start the UR16e driver
-cd /path/to/AxisForge/local
-./ur_ros2_driver.sh
+cd /path/to/AxisForge
+./scripts/ur_ros2_driver.sh
 
 # Terminal 2: Start the serial bridge to the Portenta extruder
-cd /path/to/AxisForge/local
-./microros.sh
+cd /path/to/AxisForge
+./scripts/microros.sh
 
 # Terminal 3: Launch control system
 cd /path/to/AxisForge
 source /opt/ros/humble/setup.bash
 source .venv/bin/activate
 source install/setup.bash
-ros2 launch move_robot ur_master.launch.py
+ros2 launch axisforge_bringup ur_master.launch.py
 ```
 
 ### Straight-Line Printing Test with a Fixed Nozzle Angle
 
 Each run prints one straight line with a fixed end-effector orientation. Parameters are configured in
-[`src/move_robot/config/line_print_test.yaml`](src/move_robot/config/line_print_test.yaml).
+[`src/axisforge_bringup/config/line_print_test.yaml`](src/axisforge_bringup/config/line_print_test.yaml).
 Edit the YAML file and rerun the test to apply changes. This test uses a separate entry point; do not run
 `ur_master.launch.py`, the G-code executor, or other trajectory-sending nodes at the same time.
 
@@ -122,14 +136,16 @@ Rebuild before using the new entry point for the first time:
 cd /path/to/AxisForge
 source /opt/ros/humble/setup.bash
 source .venv/bin/activate
-.venv/bin/python /usr/bin/colcon build --base-paths src --packages-select move_robot
+.venv/bin/python /usr/bin/colcon build --base-paths src
 source install/setup.bash
 
 # Explicit preview: the source YAML may contain dry_run: false from hardware tests.
 # Parameter-only edits do not require rebuilding when this source YAML is used.
-ros2 run move_robot line_print_test --ros-args \
-  --params-file src/move_robot/config/line_print_test.yaml -p dry_run:=true
+ros2 run print_control line_print_test --ros-args \
+  --params-file src/axisforge_bringup/config/line_print_test.yaml -p dry_run:=true
 ```
+
+The launch entry point is `ros2 launch axisforge_bringup line_print_test.launch.py`.
 
 Common parameters are listed below. Keep `.0` for floating-point parameters, and provide exactly three numbers for 3D parameters:
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eo pipefail
 
-PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-$PROJECT_DIR/.venv/bin/python}"
 if [[ ! -x "$PYTHON_BIN" ]]; then
     echo "Project Python not found: $PYTHON_BIN. Set PYTHON_BIN to the intended environment." >&2
@@ -67,7 +67,7 @@ ET.ElementTree(root).write(data / 'ur16e.urdf', encoding='utf-8', xml_declaratio
 
 for kind in ('DH', 'URDF'):
     target = models / kind
-    shutil.copy2(project / 'local' / 'roboticstoolbox' / 'models' / kind / 'UR16e.py', target / 'UR16e.py')
+    shutil.copy2(project / 'src' / 'ur_control' / 'models' / 'roboticstoolbox' / 'models' / kind / 'UR16e.py', target / 'UR16e.py')
     init = target / '__init__.py'
     text = init.read_text()
     import_line = f'from roboticstoolbox.models.{kind}.UR16e import UR16e'

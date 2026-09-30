@@ -3,7 +3,7 @@
 from collections import deque
 import math
 
-from move_robot.extrusion_calibration import filament_speed_to_steps_s
+from extrusion_control.extrusion_calibration import filament_speed_to_steps_s
 
 
 class ProgressExtrusion:

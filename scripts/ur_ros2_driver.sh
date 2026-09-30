@@ -3,7 +3,7 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-CALIBRATION_FILE="${UR_CALIBRATION_FILE:-$SCRIPT_DIR/ur16e_calibration.yaml}"
+CALIBRATION_FILE="${UR_CALIBRATION_FILE:-$SCRIPT_DIR/../src/axisforge_bringup/config/ur16e_calibration.yaml}"
 if [[ ! -r "$CALIBRATION_FILE" ]]; then
     echo "UR16e calibration file not found: $CALIBRATION_FILE" >&2
     exit 1

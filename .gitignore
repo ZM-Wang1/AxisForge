@@ -49,6 +49,11 @@ Thumbs.db
 *.wmv
 
 #folders
+/build/
+/install/
+/.venv/
+__pycache__/
+.pytest_cache/
 /log
 /.vscode
 /src/.vscode
