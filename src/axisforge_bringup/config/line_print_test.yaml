@@ -9,9 +9,9 @@ line_print_test:
     print_speed_mm_s: 5.0                 # Nominal average printing speed, mm/s
 
     # The starting point is the nozzle tip position in the Base frame. The values below are examples from the old launch file; measure the actual position.
-    start_xyz_mm: [-629.35, -333.62, 98.13]
+    start_xyz_mm: [-629.35, -333.62, 99.13]
     line_direction_deg: 90.0               # Direction in the Base XY plane: 0=+X, 90=+Y
-    tcp_offset_mm: [-65.73, 3.56, 99.38]       # Actual offset to the nozzle tip in the tool0 frame
+    tcp_offset_mm: [-65.73, 3.56, 97.38]       # Actual offset to the nozzle tip in the tool0 frame
     # A zero offset plans for tool0; enter the measured offset to compensate for the nozzle tip position when tilted.
     clearance_mm: 10.0                   # Clearance above the starting point / lift at the end, along Base +Z
     travel_speed_mm_s: 5.0                # Lowering/lifting speed

@@ -4,7 +4,7 @@ gcode_interpreter:
     origin_at_center: true
     x_offset: -778.0
     y_offset: -362.0
-    z_offset: 193.42
+    z_offset: 196.42
     wrist_angle: 90.0
 
     # Speed and extrusion

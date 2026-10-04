@@ -87,10 +87,10 @@ For Arduino Portenta H7:
 
 1. Install Arduino IDE 2.x from https://www.arduino.cc/en/software
 2. Add Arduino Mbed OS Portenta Boards via Board Manager
-3. Install the `AccelStepper` library via Library Manager
+3. The micro-ROS sketch uses the Portenta core's hardware timer support; install `AccelStepper` only for the standalone serial sketch
 4. Download latest `micro_ros_arduino` for Humble from [Releases](https://github.com/micro-ROS/micro_ros_arduino/releases)
 5. Upload the downloaded ZIP to the IDE using `Sketch -> Include library -> Add .ZIP Library...`
-6. Upload `firmware/DRV8825_microros/DRV8825_microros.ino` to Portenta H7
+6. Select the Portenta H7 Main Core (M7) target and upload `firmware/DRV8825_microros/DRV8825_microros.ino`
 7. Install micro-ROS agent on PC: https://github.com/micro-ROS/micro_ros_setup
 
 ### 7. Build the Workspace
