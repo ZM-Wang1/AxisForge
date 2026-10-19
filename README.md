@@ -10,6 +10,7 @@ src/
 └── diagnostics/         # Robot and Arduino latency ROS nodes
 models/ur16e/           # Custom UR16e DH and URDF classes for Robotics Toolbox
 firmware/               # Arduino sketches for extrusion and latency measurements
+scripts/                # Setup, build, and launch scripts for ROS 2 and UR16e
 STL/                    # Printable example meshes
 ```
 
@@ -109,18 +110,6 @@ source .venv/bin/activate
 source install/setup.bash
 ```
 
-`scripts/build.sh` explicitly runs colcon with `.venv/bin/python` and accepts build
-options such as `--packages-select print_control`. To use another Python environment,
-set `PYTHON_BIN` to its absolute interpreter path, as with `install_ur_models.sh`.
-
-Avoid plain `colcon build` when colcon comes from `/usr/bin/colcon`: its system-Python
-shebang takes precedence even with `(.venv)` active, so the generated ROS entry points
-use `/usr/bin/python3` and cannot find dependencies installed only in `.venv`.
-If launch fails with `ModuleNotFoundError: No module named 'roboticstoolbox'`, rerun
-`./scripts/build.sh` and source `install/setup.bash`. The equivalent explicit command
-is `.venv/bin/python /usr/bin/colcon build --base-paths src`; rebuilding replaces the
-incorrect entry points without deleting the workspace or installing into system Python.
-
 ### Usage
 
 ```bash
@@ -138,31 +127,11 @@ source /opt/ros/humble/setup.bash
 source .venv/bin/activate
 source install/setup.bash
 ros2 launch axisforge_bringup ur_master.launch.py
-```
-
-### G-code Toolpath Planning and Execution
-
-`ur_master.launch.py` now runs one G-code executor. It parses the entire file into
-segments, transforms coordinates, samples the nozzle path, solves IK and checks
-the interpolated joint trajectory before sending any motion. It uses
-`/scaled_joint_trajectory_controller/follow_joint_trajectory` directly.
-
-Rebuild `extrusion_control`, `print_control` and `axisforge_bringup` after updating.
-The default command still executes `star3d.gcode`. For offline preflight:
-
-```bash
-ros2 launch axisforge_bringup ur_master.launch.py dry_run:=true
-
 # Use the source YAML so parameter edits do not require another build.
 ros2 launch axisforge_bringup ur_master.launch.py \
   config:="$PWD/src/axisforge_bringup/config/ur_master.yaml" \
   file:="$PWD/src/print_control/gcode/star3d.gcode" dry_run:=true
 ```
-
-Remove `dry_run:=true` to execute using fresh robot joint feedback. Preflight uses
-`dry_run_seed_deg` only in dry-run mode, and creates no hardware command publishers
-in that mode. Large files can take several minutes to preflight. All segments must
-pass before the first motion; an unreachable point reports its original G-code line.
 
 Configuration is in [`ur_master.yaml`](src/axisforge_bringup/config/ur_master.yaml):
 
@@ -187,46 +156,3 @@ Configuration is in [`ur_master.yaml`](src/axisforge_bringup/config/ur_master.ya
 | `clearance_mm`, `approach_duration_s` | Approach above the first position and lift at completion; no automatic HOME movement |
 | `extrusion_smoothing_s`, `extrusion_update_period_s`, `extrusion_feedback_timeout_s` | Actual-progress velocity averaging, command interval and stale-feedback timeout |
 | `ignored_commands` | Explicit list of externally managed commands; every encountered code is reported |
-
-Supported commands include G0/G1 (including compact and modal coordinates), G20/G21,
-G90/G91, independent E modes M82/M83, G92, G4, M220/M221 and M400. The modal behavior
-follows Marlin: G90/G91 reset both modes, and a subsequent M82/M83 overrides E only.
-Unsupported commands such as G2/G3 fail preflight instead of silently changing state.
-The default compatibility list ignores G28, heater/fan commands and M84, as the old
-entry point did; it does not home, heat, cool or wait for temperature. Those devices
-remain externally managed. Remove a code from the list to reject it.
-
-Look-ahead is enabled by default. Adjacent spatial moves with the same extrusion
-sign share one trajectory action, including continuous joint velocities through
-internal boundaries. A backward braking pass and forward acceleration pass slow
-down before corners or lower-speed sections. Quadratic corner transitions stay
-within the configured geometric tolerance, and the commanded joint interpolation
-is checked against the original G-code path. Joint and sampled TCP limits can further
-slow the whole run. Near reversals and zero-blend corners still reach zero speed,
-but do not introduce an action handoff. E-only commands, dwell/M400, direction changes
-and print/travel transitions remain explicit stop boundaries.
-
-The executor tracks cumulative material over each entire run, conserving source E
-when a corner is rounded. Crossing a source segment does not reset the velocity
-history or publish zero extrusion. Actual joint feedback determines nozzle progress;
-the controller's `desired.time_from_start` only identifies the local path branch,
-so returning to the same point on a closed path does not jump to the wrong segment.
-The controller must report this trajectory time correctly, including speed scaling.
-Signed step rate follows measured material progress and the existing calibration.
-
-E-only actions use interruptible host timing and always publish zero on completion.
-This is not encoder-based material control or exact pulse counting: feedback,
-smoothing and transport delays affect delivered material. Residual nozzle pressure
-can still cause accumulation at necessary stops; this change does not implement
-pressure advance. Reverse motion uses the same calibration table at the absolute
-feed rate. The model's link-origin height check is not full collision detection.
-
-Ctrl+C, `/kb/shutdown` and `/kb/pause` stop extrusion and cancel the active trajectory
-in place. Pause currently ends the run; it does not create a resumable checkpoint.
-Old live speed/flow/Z edits and next-step requests are rejected with a message, since
-they would invalidate the completed preflight. Change parameters between runs.
-
-Straight-line tests also use G-code through `ur_master.launch.py` and the same
-`ur_master.yaml` configuration. Supply the test file with `file:=/path/to/test.gcode`;
-G0/G1 coordinates define its geometry, F defines feed rate, and E defines filament
-movement. Use `dry_run:=true` to preflight it before execution.
