@@ -20,7 +20,6 @@ setup(
     license='OpenSSL',
     entry_points={
         'console_scripts': [
-            'line_print_test = print_control.line_print_test:main',
             'gcode_interpreter = print_control.gcode_interpreter:main',
             'keyboard_node = print_control.keyboard:main',
         ],

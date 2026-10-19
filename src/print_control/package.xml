@@ -10,6 +10,7 @@
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>extrusion_control</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
   <exec_depend>action_msgs</exec_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>

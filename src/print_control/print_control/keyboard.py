@@ -9,7 +9,6 @@ class KeyboardNode(Node):
     def __init__(self):
         super().__init__("keyboard_node")
 
-        self.toggle_log_pub = self.create_publisher(Bool, "/kb/toggle_log", 10)
         self.pause_pub = self.create_publisher(Bool, "/kb/pause", 10)
         self.shutdown_pub = self.create_publisher(Bool, "/kb/shutdown", 10)
         self.speed_multiplier_pub = self.create_publisher(Float32, "/kb/speed_multiplier", 10)
@@ -21,7 +20,6 @@ class KeyboardNode(Node):
             "\n"
             "-----------------------------------\n"
             "Keyboard Node is running.\n"
-            "Press 'l' then Enter to toggle detailed logging.\n"
             "Press 'n' then Enter to send the next line of Gcode.\n"
             "Press 's <value>' then Enter to set print speed multiplier (e.g., 's 2.5').\n"
             "Press 'e <value>' then Enter to set extrusion scale factor (e.g., 'e 1.5').\n"
@@ -37,16 +35,7 @@ class KeyboardNode(Node):
         while rclpy.ok():
             try:
                 user_input = input("Enter command: ")
-                if user_input == "l":
-                    self.get_logger().info(
-                        "User pressed 'l'. Sending LOG toggle signal to move_ur node."
-                    )
-
-                    log_msg = Bool()
-                    log_msg.data = True
-                    self.toggle_log_pub.publish(log_msg)
-
-                elif user_input == "p!":
+                if user_input == "p!":
                     self.get_logger().info(
                         "User pressed 'p!'. Creating checkpoint and shutting down."
                     )

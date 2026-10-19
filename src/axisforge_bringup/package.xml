@@ -8,7 +8,6 @@
   <license>OpenSSL</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
-  <exec_depend>ur_control</exec_depend>
   <exec_depend>print_control</exec_depend>
   <exec_depend>extrusion_control</exec_depend>
   <exec_depend>ament_index_python</exec_depend>

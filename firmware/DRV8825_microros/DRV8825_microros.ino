@@ -134,8 +134,6 @@ bool check_ros_init(rcl_ret_t result) {
 // Callback accepts signed motor STEP pulses per second.
 void speed_callback(const void *msgin) {
   const std_msgs__msg__Float32 *msg = (const std_msgs__msg__Float32 *)msgin;
-  // The host calibration already expresses speed in STEP pulses/s, including
-  // the driver's microstepping. Do not multiply by the microstep setting again.
   set_stepper_speed(msg->data);
   digitalWrite(LEDG, LOW);  // At least one speed command reached the board.
   // USB serial is reserved for micro-ROS; do not print debug text here.

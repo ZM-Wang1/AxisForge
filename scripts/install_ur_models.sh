@@ -67,7 +67,8 @@ ET.ElementTree(root).write(data / 'ur16e.urdf', encoding='utf-8', xml_declaratio
 
 for kind in ('DH', 'URDF'):
     target = models / kind
-    shutil.copy2(project / 'src' / 'ur_control' / 'models' / 'roboticstoolbox' / 'models' / kind / 'UR16e.py', target / 'UR16e.py')
+    source = project / 'models' / 'ur16e' / kind / 'UR16e.py'
+    shutil.copy2(source, target / 'UR16e.py')
     init = target / '__init__.py'
     text = init.read_text()
     import_line = f'from roboticstoolbox.models.{kind}.UR16e import UR16e'

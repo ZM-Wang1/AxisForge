@@ -1,4 +1,4 @@
-"""Plan one fixed-orientation nozzle line with the repository's UR16e model."""
+"""Shared nozzle kinematics and trajectory validation with the UR16e model."""
 
 from dataclasses import dataclass, fields
 import math
@@ -7,9 +7,6 @@ import numpy as np
 import roboticstoolbox as rtb
 from spatialmath import SE3
 
-from extrusion_control.extrusion_calibration import filament_speed_to_steps_s
-
-
 JOINT_NAMES = (
     'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
     'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint',
@@ -17,16 +14,13 @@ JOINT_NAMES = (
 
 
 @dataclass(frozen=True)
-class LinePrintConfig:
+class MotionConfig:
     """Parameters use millimetres, degrees, seconds and motor steps/second."""
 
-    line_length_mm: float = 30.0
-    line_direction_deg: float = 0.0
-    start_xyz_mm: tuple = (-660.5, -244.5, 193.62)
+    # Runtime path values are supplied by each planned motion.
+    path_length_mm: float = 30.0
+    filament_per_mm: float = 0.0
     nozzle_rpy_deg: tuple = (180.0, 0.0, 90.0)
-    filament_per_mm: float = 0.20
-    print_speed_mm_s: float = 5.0
-    travel_speed_mm_s: float = 5.0
     approach_duration_s: float = 8.0
     clearance_mm: float = 10.0
     tcp_offset_mm: tuple = (0.0, 0.0, 0.0)
@@ -55,10 +49,10 @@ class LinePrintConfig:
     def validate(self):
         """Reject invalid values before constructing a trajectory or publisher."""
         vectors = {
-            'start_xyz_mm': 3, 'nozzle_rpy_deg': 3, 'tcp_offset_mm': 3,
+            'nozzle_rpy_deg': 3, 'tcp_offset_mm': 3,
             'dry_run_seed_deg': 6, 'joint_limits_deg': 6,
         }
-        unrestricted = {'line_direction_deg', 'min_link_z_mm'}
+        unrestricted = {'min_link_z_mm'}
         for field in fields(self):
             name, value = field.name, getattr(self, field.name)
             if name == 'dry_run':
@@ -82,12 +76,11 @@ class LinePrintConfig:
             raise ValueError('joint_limits_deg must be positive')
         if self.execution_timeout_factor < 1:
             raise ValueError('execution_timeout_factor must be >= 1')
-        if self.progress_threshold_mm >= self.line_length_mm:
-            raise ValueError('progress_threshold_mm must be smaller than line_length_mm')
+        if self.progress_threshold_mm >= self.path_length_mm:
+            raise ValueError('progress_threshold_mm must be smaller than path_length_mm')
         if self.extrusion_update_period_s > self.extrusion_feedback_timeout_s:
             raise ValueError('Extrusion update period must not exceed its feedback timeout')
-        filament_speed_to_steps_s(self.print_speed_mm_s * self.filament_per_mm)
-        for distance in (self.line_length_mm, self.clearance_mm):
+        for distance in (self.path_length_mm, self.clearance_mm):
             if distance / self.waypoint_spacing_mm > 10000:
                 raise ValueError('Path exceeds 10000 intervals; increase waypoint_spacing_mm')
 
@@ -124,8 +117,8 @@ def cubic_joint_state(q0, q1, v0, v1, dt, fraction):
     return q, velocity, acceleration
 
 
-class LinePrintPlanner:
-    """Generate and check a complete approach, descent, print and lift."""
+class MotionPlanner:
+    """Solve fixed-orientation nozzle poses and validate sampled joint motions."""
 
     def __init__(self, config):
         """Load the UR16e model and fixed tool orientation."""
@@ -137,10 +130,6 @@ class LinePrintPlanner:
             link.qlim = [-limit, limit]
         self.rotation = SE3.RPY(config.nozzle_rpy_deg, unit='deg', order='zyx').R
         self.offset_m = np.asarray(config.tcp_offset_mm) / 1000.0
-        angle = math.radians(config.line_direction_deg)
-        self.direction = np.array([math.cos(angle), math.sin(angle), 0.0])
-        self.start = np.asarray(config.start_xyz_mm, dtype=float)
-        self.end = self.start + config.line_length_mm * self.direction
 
     def tool_pose(self, nozzle_xyz_mm):
         """Convert a desired nozzle tip location into a tool0 target."""
@@ -219,48 +208,3 @@ class LinePrintPlanner:
                     )
                 if xyz is not None:
                     self.check_pose(q, xyz[index], xyz[index + 1])
-
-    def cartesian_motion(self, name, start, end, seed, speed):
-        """Sample one straight segment and supply continuous joint velocities."""
-        distance = np.linalg.norm(end - start)
-        intervals = max(2, math.ceil(distance / self.config.waypoint_spacing_mm))
-        xyz = np.linspace(start, end, intervals + 1)
-        positions = [np.asarray(seed)]
-        self.check_pose(seed, start, start)
-        for point in xyz[1:]:
-            joints = self.solve(point, positions[-1])
-            if np.max(np.abs(np.rad2deg(joints - positions[-1]))) > self.config.max_joint_step_deg:
-                raise ValueError(f'{name}: discontinuous IK solution')
-            positions.append(joints)
-        positions = np.asarray(positions)
-        times = np.linspace(0, distance / speed, len(positions))
-        velocities = np.gradient(positions, times, axis=0)
-        velocities[[0, -1]] = 0.0
-        motion = PlannedMotion(name, positions, velocities, times)
-        self.check_motion(motion, xyz)
-        return motion
-
-    def plan(self, seed):
-        """Plan every phase before allowing any command to be sent."""
-        seed = np.asarray(seed, dtype=float)
-        self.check_joints(seed)
-        above = self.start + [0.0, 0.0, self.config.clearance_mm]
-        above_joints = self.solve(above, seed)
-        approach = PlannedMotion(
-            'approach', np.array([seed, above_joints]), np.zeros((2, 6)),
-            np.array([0.0, self.config.approach_duration_s]),
-        )
-        self.check_motion(approach)
-        descent = self.cartesian_motion(
-            'descent', above, self.start, above_joints, self.config.travel_speed_mm_s,
-        )
-        printing = self.cartesian_motion(
-            'print', self.start, self.end, descent.positions[-1], self.config.print_speed_mm_s,
-        )
-        lift = self.cartesian_motion(
-            'lift', self.end, self.end + [0.0, 0.0, self.config.clearance_mm],
-            printing.positions[-1], self.config.travel_speed_mm_s,
-        )
-        for motion in (approach, descent, printing, lift):
-            duration_parts(float(motion.times[-1]))
-        return [approach, descent, printing, lift]

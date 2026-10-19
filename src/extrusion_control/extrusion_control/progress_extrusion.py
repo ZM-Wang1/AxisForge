@@ -1,4 +1,4 @@
-"""Estimate filament feed from measured forward progress along one print line."""
+"""Estimate filament feed from measured forward progress along a toolpath."""
 
 from collections import deque
 import math

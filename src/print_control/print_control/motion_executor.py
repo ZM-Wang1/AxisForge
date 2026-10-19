@@ -1,7 +1,5 @@
-"""Execute a single fixed-orientation line using UR trajectory actions."""
+"""Sampled trajectory execution, cancellation and measured-progress extrusion."""
 
-from dataclasses import fields
-import signal
 import time
 
 import numpy as np
@@ -12,47 +10,28 @@ from control_msgs.msg import JointTolerance
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32
 from trajectory_msgs.msg import JointTrajectoryPoint
 
-from extrusion_control.extrusion_calibration import (
-    filament_speed_to_steps_s, outside_calibration_range,
-)
-from extrusion_control.line_print_extrusion import ProgressExtrusion
-from print_control.line_print_path import (
-    JOINT_NAMES, LinePrintConfig, LinePrintPlanner, duration_parts,
-)
+from extrusion_control.extrusion_calibration import outside_calibration_range
+from extrusion_control.progress_extrusion import ProgressExtrusion
+from print_control.motion_planner import JOINT_NAMES, duration_parts
 
 
-class LinePrintTest(Node):
-    """Serial action execution; all extrusion decisions run in one executor."""
+class MotionExecutor(Node):
+    """Shared action lifecycle for sampled motion and measured-progress extrusion."""
 
-    def __init__(self):
-        """Read parameters and create command interfaces only in execution mode."""
-        super().__init__('line_print_test')
-        defaults = LinePrintConfig()
-        values = {}
-        for field in fields(defaults):
-            default = getattr(defaults, field.name)
-            if isinstance(default, tuple):
-                default = list(default)
-            values[field.name] = self.declare_parameter(field.name, default).value
-        # Explicitly reject old YAML/CLI overrides instead of silently ignoring them.
-        legacy_speed = self.declare_parameter('extrusion_speed_steps_s', -1.0).value
-        if legacy_speed != -1.0:
-            raise ValueError(
-                'extrusion_speed_steps_s was replaced by filament_per_mm; update YAML'
-            )
-        self.config = LinePrintConfig(**values)
-        self.config.validate()
-        self.planner = LinePrintPlanner(self.config)
+    def initialize_execution(self, config, planner):
+        """Initialize execution after the concrete node has read its parameters."""
+        self.config = config
+        self.planner = planner
         self.stop_requested = False
         self.aborting = False
         self.goal_future = None
         self.goal_handle = None
         self.result_future = None
+        self.motion_token = None
         self.joints = None
         self.joint_received = None
         self.feedback_received = None
@@ -61,12 +40,13 @@ class LinePrintTest(Node):
         self.progress_received = None
         self.at_print_end = False
         self.speed = 0.0
+        self.extrusion_direction = 1.0
         self.reset_extrusion()
         self.speed_publisher = None
         self.action = None
         # Dry-run has no command publishers or action client, even on shutdown.
         if not self.config.dry_run:
-            self.speed_publisher = self.create_publisher(Float32, '/stepper/speed', 10)
+            self.speed_publisher = self.create_publisher(Float32, '/stepper/speed', 1)
             self.action = ActionClient(
                 self, FollowJointTrajectory,
                 '/scaled_joint_trajectory_controller/follow_joint_trajectory',
@@ -97,7 +77,7 @@ class LinePrintTest(Node):
     def check_interrupted(self):
         """Unwind execution while keeping ROS alive for stop and cancellation."""
         if self.stop_requested or not rclpy.ok():
-            raise RuntimeError('Test interrupted')
+            raise RuntimeError('Printing interrupted')
 
     def wait_until(self, predicate, timeout, description):
         """Process callbacks until a condition, interruption or deadline."""
@@ -111,10 +91,10 @@ class LinePrintTest(Node):
             rclpy.spin_once(self, timeout_sec=0.02)
 
     def set_extrusion(self, speed, force=False):
-        """Publish changes or explicit stop commands; suppress positive abort output."""
+        """Publish changes or stops; suppress nonzero output while aborting."""
         if self.speed_publisher is None:
             return
-        if speed > 0 and (self.aborting or self.stop_requested):
+        if speed != 0 and (self.aborting or self.stop_requested):
             return
         if speed != self.speed or force:
             self.speed_publisher.publish(Float32(data=float(speed)))
@@ -123,7 +103,7 @@ class LinePrintTest(Node):
     def reset_extrusion(self):
         """Start each phase with no velocity history or pending filament feed."""
         self.extrusion_sync = ProgressExtrusion(
-            self.config.filament_per_mm, self.config.line_length_mm,
+            self.config.filament_per_mm, self.config.path_length_mm,
             self.config.extrusion_smoothing_s,
         )
         self.last_extrusion_update = None
@@ -136,7 +116,7 @@ class LinePrintTest(Node):
             speed = 0.0
         if (speed == 0 or self.last_extrusion_update is None or
                 now - self.last_extrusion_update >= self.config.extrusion_update_period_s):
-            self.set_extrusion(speed)
+            self.set_extrusion(speed * self.extrusion_direction)
             self.last_extrusion_update = now
             feed = self.extrusion_sync.filament_speed_mm_s
             if speed > 0 and not self.calibration_warned and outside_calibration_range(feed):
@@ -165,18 +145,21 @@ class LinePrintTest(Node):
         if not np.all(np.isfinite(joints)):
             self.feedback_error = 'Controller feedback contains nonfinite positions'
             return
-        position = self.planner.nozzle_position(joints)
-        progress = float((position - self.planner.start) @ self.planner.direction)
         try:
-            self.extrusion_sync.update(progress, stamp / 1e9)
+            progress, material_progress = self.feedback_progress(joints, feedback)
+            self.extrusion_sync.update(material_progress, stamp / 1e9)
         except ValueError as error:
             self.feedback_error = str(error)
             return
         if progress > self.print_progress + self.config.progress_threshold_mm:
             self.print_progress = progress
             self.progress_received = self.feedback_received
-        if progress >= self.config.line_length_mm - self.config.progress_threshold_mm:
+        if progress >= self.config.path_length_mm - self.config.progress_threshold_mm:
             self.at_print_end = True
+
+    def feedback_progress(self, joints, feedback):
+        """Map measured joints to path and material progress in the concrete executor."""
+        raise NotImplementedError('The executor must define its path progress mapping')
 
     def trajectory_goal(self, motion):
         """Encode joint samples and final tolerances as an action goal."""
@@ -199,6 +182,11 @@ class LinePrintTest(Node):
         goal.goal_time_tolerance.nanosec = nanosec
         return goal
 
+    def motion_feedback(self, message, printing, token):
+        """Ignore late feedback from a completed or cancelled trajectory."""
+        if token is self.motion_token and not self.aborting:
+            self.on_feedback(message, printing)
+
     def execute_motion(self, motion):
         """Execute one phase, enabling extrusion only after actual print progress."""
         self.check_interrupted()
@@ -217,12 +205,13 @@ class LinePrintTest(Node):
         self.goal_handle = None
         self.result_future = None
         printing = motion.name == 'print'
+        token = self.motion_token = object()
         self.get_logger().info(
             f'{motion.name}: {motion.times[-1]:.3f} s, {len(motion.times)} points'
         )
         self.goal_future = self.action.send_goal_async(
             self.trajectory_goal(motion),
-            feedback_callback=lambda msg: self.on_feedback(msg, printing),
+            feedback_callback=lambda msg: self.motion_feedback(msg, printing, token),
         )
         self.wait_until(
             self.goal_future.done, self.config.startup_timeout_s, 'trajectory acceptance',
@@ -262,6 +251,9 @@ class LinePrintTest(Node):
                 self.update_print_extrusion(now)
             rclpy.spin_once(self, timeout_sec=0.01)
         self.set_extrusion(0.0, force=True)
+        self.motion_token = None
+        if self.feedback_error:
+            raise RuntimeError(self.feedback_error)
         response = self.result_future.result()
         if (response.status != GoalStatus.STATUS_SUCCEEDED or
                 response.result.error_code != FollowJointTrajectory.Result.SUCCESSFUL):
@@ -285,61 +277,10 @@ class LinePrintTest(Node):
                 'Print completed without observed progress; check controller feedback'
             )
 
-    def run(self):
-        """Plan all phases, then execute each successful phase in sequence."""
-        cfg = self.config
-        if cfg.dry_run:
-            seed = np.deg2rad(cfg.dry_run_seed_deg)
-            self.get_logger().info(
-                'DRY RUN: using configured reference joints; no commands will be published.'
-            )
-        else:
-            self.wait_until(self.joints_fresh, cfg.startup_timeout_s, 'fresh joint_states')
-            seed = self.joints.copy()
-        motions = self.planner.plan(seed)
-        self.get_logger().info(
-            f'Nozzle XYZ mm: {self.planner.start.tolist()} -> {self.planner.end.tolist()}; '
-            f'RPY deg={list(cfg.nozzle_rpy_deg)}, filament_per_mm={cfg.filament_per_mm}'
-        )
-        nominal_feed = cfg.print_speed_mm_s * cfg.filament_per_mm
-        nominal_steps = filament_speed_to_steps_s(nominal_feed)
-        self.get_logger().info(
-            f'Target filament={cfg.line_length_mm * cfg.filament_per_mm:.4f} mm; '
-            f'nominal feed={nominal_feed:.4f} mm/s, {nominal_steps:.2f} steps/s. '
-            'Execution follows measured TCP speed; this is not measured material output.'
-        )
-        if outside_calibration_range(nominal_feed):
-            self.get_logger().warn(
-                'Nominal filament feed is outside [0.91, 10.161] mm/s; '
-                'endpoint calibration will be used. Verify material output.'
-            )
-        self.get_logger().info(
-            'Planned phases: ' + ', '.join(f'{m.name}={m.times[-1]:.3f}s' for m in motions)
-        )
-        self.check_interrupted()
-        if cfg.dry_run:
-            return
-        self.wait_until(
-            self.action.server_is_ready, cfg.startup_timeout_s, 'trajectory action server',
-        )
-        if cfg.filament_per_mm > 0:
-            self.wait_until(
-                lambda: self.speed_publisher.get_subscription_count() > 0,
-                cfg.startup_timeout_s, 'extruder subscriber on /stepper/speed',
-            )
-        # Process queued states after planning; stale start poses must not be sent.
-        previous_sample = self.joint_received
-        self.wait_until(
-            lambda: self.joint_received != previous_sample and self.joints_fresh(),
-            cfg.startup_timeout_s, 'joint feedback after planning',
-        )
-        for motion in motions:
-            self.execute_motion(motion)
-        self.get_logger().info('Line print completed; extrusion stopped and nozzle lifted.')
-
     def stop(self):
         """Stop extrusion first; handle late acceptance and wait for cancellation."""
         self.aborting = True
+        self.motion_token = None
         self.set_extrusion(0.0, force=True)
         if self.config.dry_run or not rclpy.ok():
             return
@@ -376,44 +317,3 @@ class LinePrintTest(Node):
         for _ in range(5):
             self.set_extrusion(0.0, force=True)
             rclpy.spin_once(self, timeout_sec=0.02)
-
-
-def main(args=None):
-    """Run once and deliver stop/cancel before shutting down ROS."""
-    # Keep ROS alive while handling Ctrl+C/SIGTERM so stop/cancel can be delivered.
-    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
-    node = None
-    exit_code = 0
-    previous_handlers = {}
-    try:
-        node = LinePrintTest()
-
-        def request_stop(signum, frame):
-            node.stop_requested = True
-
-        for signum in (signal.SIGINT, signal.SIGTERM):
-            previous_handlers[signum] = signal.signal(signum, request_stop)
-        node.run()
-    except (ValueError, RuntimeError, KeyboardInterrupt) as error:
-        exit_code = 1
-        if node is not None:
-            node.get_logger().error(str(error) or 'Interrupted')
-        else:
-            print(f'Line print configuration failed: {error}')
-    finally:
-        try:
-            if node is not None:
-                node.stop()
-        finally:
-            if node is not None:
-                node.destroy_node()
-            if rclpy.ok():
-                rclpy.shutdown()
-            for signum, handler in previous_handlers.items():
-                signal.signal(signum, handler)
-    if exit_code:
-        raise SystemExit(exit_code)
-
-
-if __name__ == '__main__':
-    main()
