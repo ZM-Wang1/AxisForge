@@ -1,0 +1,228 @@
+description: Nozzle tip touching the bed through paper; robot Base frame, mm
+stamp: '2026-10-25T10:50:23'
+config: /home/zimeng/phd/AxisForge/src/axisforge_bringup/config/ur_master.yaml
+paper_thickness_mm: 0.1
+nozzle_rpy_deg:
+- 180.0
+- 0.0
+- 90.0
+tcp_offset_mm:
+- -65.73
+- 3.56
+- 99.38
+transform:
+  origin_at_center: true
+  bed_size_mm:
+  - 235.0
+  - 235.0
+  x_offset: -822.13
+  y_offset: -504.78
+  z_offset: 98.2
+points:
+- point: 1
+  grid_xy:
+  - 30.0
+  - 30.0
+  gcode_xy:
+  - 29.9899
+  - 29.9984
+  nozzle_base_mm:
+  - -674.6401
+  - -357.2816
+  - 97.1958
+  bed_z_mm: 97.0958
+  commanded_base_mm:
+  - -674.63
+  - -357.28
+  - 97.2
+  joints_rad:
+  - 0.167851
+  - -0.846151
+  - 1.52403
+  - -2.248688
+  - -1.570789
+  - 0.167865
+- point: 2
+  grid_xy:
+  - 117.5
+  - 30.0
+  gcode_xy:
+  - 117.4958
+  - 29.999
+  nozzle_base_mm:
+  - -587.1342
+  - -357.281
+  - 97.1993
+  bed_z_mm: 97.0993
+  commanded_base_mm:
+  - -587.13
+  - -357.28
+  - 97.2
+  joints_rad:
+  - 0.190942
+  - -0.97247
+  - 1.791061
+  - -2.389419
+  - -1.570804
+  - 0.190935
+- point: 3
+  grid_xy:
+  - 205.0
+  - 30.0
+  gcode_xy:
+  - 205.0207
+  - 29.9767
+  nozzle_base_mm:
+  - -499.6093
+  - -357.3033
+  - 97.4924
+  bed_z_mm: 97.3924
+  commanded_base_mm:
+  - -499.63
+  - -357.28
+  - 97.5
+  joints_rad:
+  - 0.221052
+  - -1.086676
+  - 2.026583
+  - -2.510687
+  - -1.570773
+  - 0.221
+- point: 4
+  grid_xy:
+  - 205.0
+  - 117.5
+  gcode_xy:
+  - 205.0055
+  - 117.5036
+  nozzle_base_mm:
+  - -499.6245
+  - -269.7764
+  - 97.6598
+  bed_z_mm: 97.5598
+  commanded_base_mm:
+  - -499.63
+  - -269.78
+  - 97.65
+  joints_rad:
+  - 0.05875
+  - -1.142139
+  - 2.13853
+  - -2.567177
+  - -1.570801
+  - 0.05877
+- point: 5
+  grid_xy:
+  - 117.5
+  - 117.5
+  gcode_xy:
+  - 117.5054
+  - 117.4889
+  nozzle_base_mm:
+  - -587.1246
+  - -269.7911
+  - 97.7913
+  bed_z_mm: 97.6913
+  commanded_base_mm:
+  - -587.13
+  - -269.78
+  - 97.8
+  joints_rad:
+  - 0.050221
+  - -1.023993
+  - 1.896009
+  - -2.442824
+  - -1.570789
+  - 0.050223
+- point: 6
+  grid_xy:
+  - 30.0
+  - 117.5
+  gcode_xy:
+  - 29.974
+  - 117.5156
+  nozzle_base_mm:
+  - -674.656
+  - -269.7644
+  - 97.7542
+  bed_z_mm: 97.6542
+  commanded_base_mm:
+  - -674.63
+  - -269.78
+  - 97.75
+  joints_rad:
+  - 0.043784
+  - -0.896085
+  - 1.628048
+  - -2.302807
+  - -1.57078
+  - 0.043816
+- point: 7
+  grid_xy:
+  - 30.0
+  - 205.0
+  gcode_xy:
+  - 29.9781
+  - 205.0139
+  nozzle_base_mm:
+  - -674.6519
+  - -182.2661
+  - 98.6676
+  bed_z_mm: 98.5676
+  commanded_base_mm:
+  - -674.63
+  - -182.28
+  - 98.65
+  joints_rad:
+  - -0.085687
+  - -0.929293
+  - 1.694629
+  - -2.336176
+  - -1.570793
+  - -0.085656
+- point: 8
+  grid_xy:
+  - 117.5
+  - 205.0
+  gcode_xy:
+  - 117.4778
+  - 205.0144
+  nozzle_base_mm:
+  - -587.1522
+  - -182.2656
+  - 98.316
+  bed_z_mm: 98.216
+  commanded_base_mm:
+  - -587.13
+  - -182.28
+  - 98.3
+  joints_rad:
+  - -0.098656
+  - -1.058429
+  - 1.964839
+  - -2.477252
+  - -1.570789
+  - -0.098618
+- point: 9
+  grid_xy:
+  - 205.0
+  - 205.0
+  gcode_xy:
+  - 204.9907
+  - 205.0111
+  nozzle_base_mm:
+  - -499.6393
+  - -182.2689
+  - 98.2097
+  bed_z_mm: 98.1097
+  commanded_base_mm:
+  - -499.63
+  - -182.28
+  - 98.2
+  joints_rad:
+  - -0.116328
+  - -1.180945
+  - 2.213329
+  - -2.603208
+  - -1.570773
+  - -0.116308

@@ -15,7 +15,7 @@ def generate_launch_description():
     config = os.path.join(
         get_package_share_directory('axisforge_bringup'), 'config', 'ur_master.yaml',
     )
-    gcode_file = os.path.join(get_package_share_directory('print_control'), 'gcode', 'star3d.gcode')
+    gcode_file = os.path.join(get_package_share_directory('print_control'), 'gcode', 'angle_calibration_matrix.gcode')
     return LaunchDescription([
         DeclareLaunchArgument('config', default_value=config, description='ROS parameter YAML'),
         DeclareLaunchArgument('file', default_value=gcode_file, description='G-code file path'),

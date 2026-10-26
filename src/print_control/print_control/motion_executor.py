@@ -1,4 +1,4 @@
-"""Sampled trajectory execution, cancellation and measured-progress extrusion."""
+"""Sampled trajectory execution, cancellation and feed-forward extrusion."""
 
 import time
 
@@ -14,13 +14,11 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32
 from trajectory_msgs.msg import JointTrajectoryPoint
 
-from extrusion_control.extrusion_calibration import outside_calibration_range
-from extrusion_control.progress_extrusion import ProgressExtrusion
 from print_control.motion_planner import JOINT_NAMES, duration_parts
 
 
 class MotionExecutor(Node):
-    """Shared action lifecycle for sampled motion and measured-progress extrusion."""
+    """Shared action lifecycle for sampled motion and feed-forward extrusion."""
 
     def initialize_execution(self, config, planner):
         """Initialize execution after the concrete node has read its parameters."""
@@ -35,13 +33,9 @@ class MotionExecutor(Node):
         self.joints = None
         self.joint_received = None
         self.feedback_received = None
-        self.feedback_error = None
-        self.print_progress = 0.0
-        self.progress_received = None
-        self.at_print_end = False
         self.speed = 0.0
-        self.extrusion_direction = 1.0
-        self.reset_extrusion()
+        self.commanded_steps = 0.0
+        self.last_extrusion_update = None
         self.speed_publisher = None
         self.action = None
         # Dry-run has no command publishers or action client, even on shutdown.
@@ -100,66 +94,21 @@ class MotionExecutor(Node):
             self.speed_publisher.publish(Float32(data=float(speed)))
             self.speed = speed
 
-    def reset_extrusion(self):
-        """Start each phase with no velocity history or pending filament feed."""
-        self.extrusion_sync = ProgressExtrusion(
-            self.config.filament_per_mm, self.config.path_length_mm,
-            self.config.extrusion_smoothing_s,
-        )
-        self.last_extrusion_update = None
-        self.calibration_warned = False
+    def stream_extrusion(self, extrusion, elapsed):
+        """Command the mean speed that reaches the planned position one period ahead.
 
-    def update_print_extrusion(self, now):
-        """Throttle positive commands; deliver zero immediately on a measured stop."""
-        speed = self.extrusion_sync.steps_s
-        if self.progress_received is None or self.at_print_end:
-            speed = 0.0
-        if (speed == 0 or self.last_extrusion_update is None or
-                now - self.last_extrusion_update >= self.config.extrusion_update_period_s):
-            self.set_extrusion(speed * self.extrusion_direction)
-            self.last_extrusion_update = now
-            feed = self.extrusion_sync.filament_speed_mm_s
-            if speed > 0 and not self.calibration_warned and outside_calibration_range(feed):
-                self.get_logger().warn(
-                    f'Filament feed {feed:.4f} mm/s is outside the calibrated '
-                    '[0.91, 10.161] mm/s range; using the nearest endpoint steps/mm.'
-                )
-                self.calibration_warned = True
-
-    def on_feedback(self, message, printing):
-        """Track actual nozzle progress during the printing action."""
-        feedback = message.feedback
-        self.feedback_received = time.monotonic()
-        if not printing or self.aborting:
-            return
-        stamp = feedback.header.stamp.sec * 1_000_000_000 + feedback.header.stamp.nanosec
-        age = (self.get_clock().now().nanoseconds - stamp) / 1e9
-        if stamp == 0 or abs(age) > self.config.extrusion_feedback_timeout_s:
-            self.feedback_error = 'Extrusion feedback timestamp is missing or stale'
-            return
-        mapping = dict(zip(feedback.joint_names, feedback.actual.positions))
-        if not all(name in mapping for name in JOINT_NAMES):
-            self.feedback_error = 'Controller feedback is missing joint positions'
-            return
-        joints = np.array([mapping[name] for name in JOINT_NAMES])
-        if not np.all(np.isfinite(joints)):
-            self.feedback_error = 'Controller feedback contains nonfinite positions'
-            return
-        try:
-            progress, material_progress = self.feedback_progress(joints, feedback)
-            self.extrusion_sync.update(material_progress, stamp / 1e9)
-        except ValueError as error:
-            self.feedback_error = str(error)
-            return
-        if progress > self.print_progress + self.config.progress_threshold_mm:
-            self.print_progress = progress
-            self.progress_received = self.feedback_received
-        if progress >= self.config.path_length_mm - self.config.progress_threshold_mm:
-            self.at_print_end = True
-
-    def feedback_progress(self, joints, feedback):
-        """Map measured joints to path and material progress in the concrete executor."""
-        raise NotImplementedError('The executor must define its path progress mapping')
+        commanded_steps integrates the published speed on this clock, so loop jitter
+        shifts when filament is fed but never how much, as in Klipper's step generation.
+        """
+        period = self.config.extrusion_update_period_s
+        if self.last_extrusion_update is not None:
+            held = elapsed - self.last_extrusion_update
+            if held < period:
+                return
+            self.commanded_steps += self.speed * held
+        target = extrusion.steps_at(elapsed + period)
+        self.set_extrusion((target - self.commanded_steps) / period)
+        self.last_extrusion_update = elapsed
 
     def trajectory_goal(self, motion):
         """Encode joint samples and final tolerances as an action goal."""
@@ -182,13 +131,13 @@ class MotionExecutor(Node):
         goal.goal_time_tolerance.nanosec = nanosec
         return goal
 
-    def motion_feedback(self, message, printing, token):
-        """Ignore late feedback from a completed or cancelled trajectory."""
-        if token is self.motion_token and not self.aborting:
-            self.on_feedback(message, printing)
+    def motion_feedback(self, token):
+        """Controller feedback is only a liveness signal; ignore a finished trajectory's."""
+        if token is self.motion_token:
+            self.feedback_received = time.monotonic()
 
-    def execute_motion(self, motion):
-        """Execute one phase, enabling extrusion only after actual print progress."""
+    def execute_motion(self, motion, extrusion=None):
+        """Execute one phase; a planned extrusion profile runs on the trajectory clock."""
         self.check_interrupted()
         if not self.joints_fresh():
             raise RuntimeError('Joint feedback is stale before sending a trajectory')
@@ -196,22 +145,18 @@ class MotionExecutor(Node):
         if error > self.config.start_tolerance_deg:
             raise RuntimeError(f'Robot moved away from planned start ({error:.3f} deg)')
         self.set_extrusion(0.0, force=True)
-        self.reset_extrusion()
+        self.commanded_steps = 0.0
+        self.last_extrusion_update = None
         self.feedback_received = None
-        self.feedback_error = None
-        self.print_progress = 0.0
-        self.progress_received = None
-        self.at_print_end = False
         self.goal_handle = None
         self.result_future = None
-        printing = motion.name == 'print'
         token = self.motion_token = object()
         self.get_logger().info(
             f'{motion.name}: {motion.times[-1]:.3f} s, {len(motion.times)} points'
         )
         self.goal_future = self.action.send_goal_async(
             self.trajectory_goal(motion),
-            feedback_callback=lambda msg: self.motion_feedback(msg, printing, token),
+            feedback_callback=lambda message: self.motion_feedback(token),
         )
         self.wait_until(
             self.goal_future.done, self.config.startup_timeout_s, 'trajectory acceptance',
@@ -220,14 +165,13 @@ class MotionExecutor(Node):
         if not self.goal_handle.accepted:
             raise RuntimeError(f'{motion.name}: controller rejected trajectory')
         self.result_future = self.goal_handle.get_result_async()
+        # An unstamped trajectory starts when the controller accepts it.
         started = time.monotonic()
         deadline = (started + motion.times[-1] * self.config.execution_timeout_factor +
                     self.config.stall_timeout_s)
         while not self.result_future.done():
             self.check_interrupted()
             now = time.monotonic()
-            if self.feedback_error:
-                raise RuntimeError(self.feedback_error)
             if not self.joints_fresh():
                 raise RuntimeError('Joint feedback became stale')
             last_feedback = (
@@ -237,30 +181,28 @@ class MotionExecutor(Node):
                 raise RuntimeError('Controller feedback timed out')
             if now > deadline:
                 raise RuntimeError(f'{motion.name}: execution timed out')
-            if printing:
-                if now - last_feedback > self.config.extrusion_feedback_timeout_s:
-                    raise RuntimeError('Extrusion feedback timed out')
-                last_progress = (
-                    self.progress_received if self.progress_received is not None else started
-                )
-                if not self.at_print_end and now - last_progress > self.config.stall_timeout_s:
-                    raise RuntimeError('Print motion stalled; extrusion stopped')
-                if (self.config.filament_per_mm > 0 and
-                        self.speed_publisher.get_subscription_count() == 0):
+            if extrusion is not None:
+                if self.speed_publisher.get_subscription_count() == 0:
                     raise RuntimeError('Extruder subscriber disconnected')
-                self.update_print_extrusion(now)
+                self.stream_extrusion(extrusion, now - started)
             rclpy.spin_once(self, timeout_sec=0.01)
-        self.set_extrusion(0.0, force=True)
         self.motion_token = None
-        if self.feedback_error:
-            raise RuntimeError(self.feedback_error)
         response = self.result_future.result()
         if (response.status != GoalStatus.STATUS_SUCCEEDED or
                 response.result.error_code != FollowJointTrajectory.Result.SUCCESSFUL):
+            self.set_extrusion(0.0, force=True)
             raise RuntimeError(
                 f'{motion.name}: action status={response.status}, '
                 f'error={response.result.error_code}: {response.result.error_string}'
             )
+        if extrusion is not None:
+            # Success may arrive a few ms before this clock reaches the end of the profile.
+            end = started + extrusion.duration_s + self.config.extrusion_update_period_s
+            while time.monotonic() < end:
+                self.check_interrupted()
+                self.stream_extrusion(extrusion, time.monotonic() - started)
+                rclpy.spin_once(self, timeout_sec=0.005)
+        self.set_extrusion(0.0, force=True)
         # Require a new joint sample before checking the end of this phase.
         previous_sample = self.joint_received
         self.wait_until(
@@ -271,10 +213,6 @@ class MotionExecutor(Node):
         if error > self.config.joint_goal_tolerance_rad:
             raise RuntimeError(
                 f'{motion.name}: measured end joints differ from the goal ({error:.6f} rad)'
-            )
-        if printing and self.progress_received is None:
-            raise RuntimeError(
-                'Print completed without observed progress; check controller feedback'
             )
 
     def stop(self):

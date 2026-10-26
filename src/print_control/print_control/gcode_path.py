@@ -5,7 +5,11 @@ import math
 
 import numpy as np
 
-from extrusion_control.extrusion_calibration import filament_speed_to_steps_s
+from extrusion_control.extrusion_calibration import (
+    MAX_MOVE_STEPS, STEPS_PER_MM, filament_speed_to_steps_s,
+)
+from extrusion_control.extrusion_profile import ExtrusionProfile
+from print_control.bed_surface import BedSurface, subdivide
 from print_control.gcode_parser import ToolpathSegment
 from print_control.gcode_lookahead import ContinuousPath, build_continuous_path
 from print_control.motion_planner import (
@@ -39,7 +43,11 @@ class GCodeConfig:
     corner_blend_tolerance_mm: float = 0.05
     max_corner_speed_mm_s: float = 10.0
     max_continuous_points: int = 100000
-    trajectory_tracking_window_mm: float = 2.0
+    extrusion_move_margin_s: float = 0.05
+    pressure_advance_s: float = 0.0
+    bed_probe_file: str = ''
+    bed_z_adjust_mm: float = 0.0
+    bed_probe_extrapolation_mm: float = 5.0
     ignored_commands: tuple = ('G28', 'M84', 'M104', 'M105', 'M106', 'M107', 'M109',
                                'M140', 'M190')
 
@@ -51,8 +59,13 @@ class GCodeConfig:
             raise ValueError('origin_at_center must be boolean')
         if not isinstance(self.lookahead_enabled, bool):
             raise ValueError('lookahead_enabled must be boolean')
-        if self.max_path_acceleration_mm_s2 <= 0 or self.trajectory_tracking_window_mm <= 0:
-            raise ValueError('Path acceleration and tracking window must be positive')
+        if self.max_path_acceleration_mm_s2 <= 0:
+            raise ValueError('max_path_acceleration_mm_s2 must be positive')
+        if self.extrusion_move_margin_s <= 0:
+            raise ValueError('extrusion_move_margin_s must be positive')
+        if self.pressure_advance_s < 0 or self.bed_probe_extrapolation_mm < 0:
+            raise ValueError('pressure_advance_s and bed_probe_extrapolation_mm must not be '
+                             'negative')
         if self.corner_blend_tolerance_mm < 0:
             raise ValueError('corner_blend_tolerance_mm must be nonnegative')
         if (type(self.max_continuous_points) is not int or self.max_continuous_points < 3):
@@ -85,13 +98,23 @@ class GCodeConfig:
 
 @dataclass
 class PlannedStep:
-    """A checked robot motion, timed E-only action, or zero-extrusion dwell."""
+    """A checked robot motion, firmware-counted E-only move, or zero-extrusion dwell."""
 
     segment: ToolpathSegment | None
     motion: PlannedMotion | None = None
+    extrusion: ExtrusionProfile | None = None  # Feed-forward E of a depositing motion
     extrusion_steps_s: float = 0.0
+    extrusion_steps: int = 0  # Signed STEP pulses the firmware counts for E-only moves
     duration_s: float = 0.0
     path: ContinuousPath | None = None
+
+
+def smoothstep_filament(material_mm, duration_s):
+    """Filament of a sampled_line: E follows its rest-to-rest 3u^2 - 2u^3 progress."""
+    def filament(times):
+        u = times / duration_s
+        return material_mm * u**2 * (3 - 2 * u), material_mm * 6 * u * (1 - u) / duration_s
+    return filament
 
 
 class GCodePlanner(MotionPlanner):
@@ -109,6 +132,19 @@ class GCodePlanner(MotionPlanner):
         if (settings.lookahead_enabled and
                 settings.corner_blend_tolerance_mm >= self.config.path_tolerance_mm):
             raise ValueError('corner_blend_tolerance_mm must be less than path_tolerance_mm')
+        self.bed = None
+        if settings.bed_probe_file:
+            self.bed = BedSurface.load(
+                settings.bed_probe_file, self.config.tcp_offset_mm, self.config.nozzle_rpy_deg,
+                settings.bed_probe_extrapolation_mm,
+            )
+
+    def transform(self, point):
+        """G-code to robot Base; with a probed bed, Z rides on the measured surface."""
+        base = np.asarray(self.settings.transform(point), dtype=float)
+        if self.bed is not None:
+            base[2] = point[2] + self.bed.height(base) + self.settings.bed_z_adjust_mm
+        return tuple(base)
 
     def nozzle_jacobian(self, joints):
         """Return the Base-frame Jacobian at the actual nozzle offset."""
@@ -116,6 +152,13 @@ class GCodePlanner(MotionPlanner):
         offset = self.robot.fkine(joints).R @ self.offset_m
         jacobian[:3] += np.cross(jacobian[3:].T, offset).T
         return jacobian
+
+    def extrusion_profile(self, duration_s, filament, direction):
+        """Sample planned filament (mm, mm/s) at the command period; K only for deposition."""
+        period = self.config.extrusion_update_period_s
+        times = np.linspace(0.0, duration_s, math.ceil(duration_s / period) + 1)
+        advance = self.settings.pressure_advance_s if direction > 0 else 0.0
+        return ExtrusionProfile.plan(times, *filament(times), advance, direction)
 
     def continuous_motion(self, segments, speeds, seed, progress_callback=None):
         """Plan a full run with shared velocities and no action gaps at source corners."""
@@ -261,7 +304,12 @@ class GCodePlanner(MotionPlanner):
         first = spatial[0]
         # A non-extruding initial move establishes the start, as in the old entry point.
         skip_first = first is segments[0] and first.delta_e == 0
-        entry = cfg.transform(first.end if skip_first else first.start)
+        if self.bed is not None:
+            # Straight robot lines between nearby points follow the curved bed. The skipped
+            # entry move starts at the G-code origin and is never executed, so keep it whole.
+            head = segments[:1] if skip_first else []
+            segments = head + subdivide(segments[len(head):])
+        entry = self.transform(first.end if skip_first else first.start)
         seed = np.asarray(seed, dtype=float)
         self.check_joints(seed)
         above = np.asarray(entry) + [0, 0, self.config.clearance_mm]
@@ -284,8 +332,8 @@ class GCodePlanner(MotionPlanner):
             if segment is first and skip_first:
                 continue
             try:
-                transformed = replace(segment, start=cfg.transform(segment.start),
-                                      end=cfg.transform(segment.end),
+                transformed = replace(segment, start=self.transform(segment.start),
+                                      end=self.transform(segment.end),
                                       delta_e=segment.delta_e * cfg.extrusion_scale_factor)
                 if segment.kind == 'dwell':
                     steps.append(PlannedStep(transformed, duration_s=segment.dwell_s))
@@ -293,13 +341,18 @@ class GCodePlanner(MotionPlanner):
                 if segment.length_mm < 1e-9:
                     feed = min(segment.feed_mm_s * cfg.print_speed_multiplier,
                                cfg.max_extrusion_speed_mm_s)
-                    # Flow changes the distance; calibrate at the actual commanded speed.
                     speed = math.copysign(filament_speed_to_steps_s(feed), transformed.delta_e)
                     if transformed.delta_e == 0:
                         speed = 0.0
+                    # The firmware counts these pulses, so transport jitter cannot change
+                    # the amount. round() is symmetric: equal retract/unretract cancel.
+                    pulses = round(transformed.delta_e * STEPS_PER_MM)
+                    if abs(pulses) > MAX_MOVE_STEPS:
+                        raise ValueError(f'E-only move needs {abs(pulses)} steps; '
+                                         f'firmware limit is {MAX_MOVE_STEPS}')
                     duration = abs(transformed.delta_e) / feed
                     steps.append(PlannedStep(transformed, extrusion_steps_s=speed,
-                                             duration_s=duration))
+                                             extrusion_steps=pulses, duration_s=duration))
                     continue
                 if cfg.lookahead_enabled:
                     run = [transformed]
@@ -312,8 +365,8 @@ class GCodePlanner(MotionPlanner):
                                 np.sign(transformed.delta_e)):
                             break
                         run.append(replace(
-                            following, start=cfg.transform(following.start),
-                            end=cfg.transform(following.end),
+                            following, start=self.transform(following.start),
+                            end=self.transform(following.end),
                             delta_e=following.delta_e * cfg.extrusion_scale_factor,
                         ))
                         speeds.append(self.speed_for(following))
@@ -324,7 +377,12 @@ class GCodePlanner(MotionPlanner):
                             progress_callback(index + int(point * len(run) / count), len(segments))
 
                     motion, path = self.continuous_motion(run, speeds, joints, report)
-                    steps.append(PlannedStep(transformed, motion, path=path))
+                    extrusion = None
+                    if path.direction:
+                        extrusion = self.extrusion_profile(
+                            float(path.times[-1]), path.filament, path.direction,
+                        )
+                    steps.append(PlannedStep(transformed, motion, extrusion, path=path))
                     joints = motion.positions[-1]
                     last_point = run[-1].end
                     continue
@@ -332,12 +390,18 @@ class GCodePlanner(MotionPlanner):
                 ratio = abs(transformed.delta_e) / segment.length_mm
                 if ratio:
                     speed = min(speed, cfg.max_extrusion_speed_mm_s / ratio)
-                    filament_speed_to_steps_s(speed * ratio)
                 motion = self.sampled_line(
                     'print' if transformed.delta_e else 'travel', transformed.start,
                     transformed.end, joints, speed,
                 )
-                steps.append(PlannedStep(transformed, motion))
+                extrusion = None
+                if ratio:
+                    duration = float(motion.times[-1])
+                    extrusion = self.extrusion_profile(
+                        duration, smoothstep_filament(abs(transformed.delta_e), duration),
+                        math.copysign(1.0, transformed.delta_e),
+                    )
+                steps.append(PlannedStep(transformed, motion, extrusion))
                 joints = motion.positions[-1]
                 last_point = transformed.end
             except ValueError as error:

@@ -42,29 +42,22 @@ class ContinuousPath:
             candidates.append(start + fraction * delta)
         return min(candidates, key=lambda candidate: np.linalg.norm(point - candidate))
 
-    def project(self, point, desired_time, window_mm):
-        """Project actual TCP locally, using scaled controller time to disambiguate loops."""
-        if not math.isfinite(desired_time) or not 0 <= desired_time <= self.times[-1] + 1e-6:
-            raise ValueError('Controller trajectory time is outside the active path')
-        expected = float(np.interp(desired_time, self.times, self.distances))
-        first = max(0, int(np.searchsorted(self.distances, expected - window_mm)) - 1)
-        last = min(len(self.points) - 1, int(np.searchsorted(
-            self.distances, expected + window_mm, side='right')))
-        starts = self.points[first:last]
-        delta = self.points[first + 1:last + 1] - starts
-        fractions = np.clip(np.sum((point - starts) * delta, axis=1) /
-                            np.sum(delta * delta, axis=1), 0, 1)
-        projections = starts + fractions[:, None] * delta
-        errors = np.linalg.norm(projections - point, axis=1)
-        progress = (self.distances[first:last] +
-                    fractions * np.diff(self.distances[first:last + 1]))
-        # At a geometric intersection, prefer the branch indicated by the controller.
-        candidates = np.flatnonzero(errors <= errors.min() + 1e-6)
-        local = candidates[np.argmin(abs(progress[candidates] - expected))]
-        station = float(progress[local])
-        if abs(station - expected) > window_mm + 1e-6:
-            raise ValueError('Actual TCP progress is outside the controller tracking window')
-        return station, float(np.interp(station, self.distances, self.material)), first + int(local)
+    def filament(self, times):
+        """Planned filament position (mm) and speed (mm/s) at trajectory times.
+
+        plan_speeds accelerates uniformly within each sample interval and material is
+        linear in arc length there, so this follows the planned timing exactly.
+        """
+        times = np.clip(times, self.times[0], self.times[-1])
+        index = np.clip(np.searchsorted(self.times, times, side='right') - 1,
+                        0, len(self.times) - 2)
+        elapsed = times - self.times[index]
+        start_speed = self.speeds[index]
+        acceleration = (self.speeds[index + 1] - start_speed) / np.diff(self.times)[index]
+        distance = start_speed * elapsed + acceleration * elapsed**2 / 2
+        ratio = np.diff(self.material)[index] / np.diff(self.distances)[index]
+        return (self.material[index] + ratio * distance,
+                ratio * (start_speed + acceleration * elapsed))
 
 
 def plan_speeds(distances, limits, acceleration):
@@ -105,7 +98,10 @@ def build_continuous_path(segments, speed_limits, spacing, blend_tolerance, corn
     stop = np.zeros(len(segments) + 1, dtype=bool)
     for index in range(1, len(segments)):
         cosine = float(np.clip(vectors[index - 1] @ vectors[index], -1, 1))
-        if cosine > 1 - 1e-10:
+        # Pieces of one source line (bed subdivision) bend only by the bed curvature
+        # (~0.1 deg); a corner blend there would cap every piece at max_corner_speed.
+        same_line = segments[index - 1].source_line == segments[index].source_line
+        if cosine > 1 - 1e-10 or same_line:
             continue
         # Near reversals cannot be passed at a finite nonzero speed in a tiny blend.
         if cosine < -0.95 or blend_tolerance == 0:

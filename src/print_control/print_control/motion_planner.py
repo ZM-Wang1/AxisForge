@@ -17,9 +17,7 @@ JOINT_NAMES = (
 class MotionConfig:
     """Parameters use millimetres, degrees, seconds and motor steps/second."""
 
-    # Runtime path values are supplied by each planned motion.
-    path_length_mm: float = 30.0
-    filament_per_mm: float = 0.0
+    # Supplied by the planner from its own orientation settings.
     nozzle_rpy_deg: tuple = (180.0, 0.0, 90.0)
     approach_duration_s: float = 8.0
     clearance_mm: float = 10.0
@@ -41,10 +39,7 @@ class MotionConfig:
     stall_timeout_s: float = 2.0
     execution_timeout_factor: float = 3.0
     cancel_timeout_s: float = 3.0
-    progress_threshold_mm: float = 0.02
-    extrusion_smoothing_s: float = 0.10
-    extrusion_update_period_s: float = 0.05
-    extrusion_feedback_timeout_s: float = 0.25
+    extrusion_update_period_s: float = 0.01
 
     def validate(self):
         """Reject invalid values before constructing a trajectory or publisher."""
@@ -67,22 +62,14 @@ class MotionConfig:
                     raise ValueError(f'{name} must contain {vectors[name]} numbers')
             elif array.shape != ():
                 raise ValueError(f'{name} must be a number')
-            elif name == 'filament_per_mm':
-                if value < 0:
-                    raise ValueError('filament_per_mm must be nonnegative (0 disables extrusion)')
             elif name not in unrestricted and value <= 0:
                 raise ValueError(f'{name} must be positive')
         if np.any(np.asarray(self.joint_limits_deg) <= 0):
             raise ValueError('joint_limits_deg must be positive')
         if self.execution_timeout_factor < 1:
             raise ValueError('execution_timeout_factor must be >= 1')
-        if self.progress_threshold_mm >= self.path_length_mm:
-            raise ValueError('progress_threshold_mm must be smaller than path_length_mm')
-        if self.extrusion_update_period_s > self.extrusion_feedback_timeout_s:
-            raise ValueError('Extrusion update period must not exceed its feedback timeout')
-        for distance in (self.path_length_mm, self.clearance_mm):
-            if distance / self.waypoint_spacing_mm > 10000:
-                raise ValueError('Path exceeds 10000 intervals; increase waypoint_spacing_mm')
+        if self.clearance_mm / self.waypoint_spacing_mm > 10000:
+            raise ValueError('Path exceeds 10000 intervals; increase waypoint_spacing_mm')
 
 
 @dataclass

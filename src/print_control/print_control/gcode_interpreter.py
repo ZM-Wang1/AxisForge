@@ -1,8 +1,7 @@
 """Preflight G-code toolpaths and execute sampled UR trajectories with extrusion."""
 
-from dataclasses import fields, replace
+from dataclasses import fields
 from pathlib import Path
-import math
 import signal
 import time
 
@@ -10,10 +9,8 @@ import numpy as np
 import rclpy
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.signals import SignalHandlerOptions
-from std_msgs.msg import Bool, Float32
+from std_msgs.msg import Bool, Float32, Float32MultiArray
 
-from extrusion_control.extrusion_calibration import steps_per_mm
-from extrusion_control.progress_extrusion import ProgressExtrusion
 from print_control.gcode_parser import GCodeParser
 from print_control.gcode_path import GCodeConfig, GCodePlanner
 from print_control.motion_executor import MotionExecutor
@@ -28,14 +25,14 @@ class GCodeInterpreter(MotionExecutor):
         super().__init__('gcode_interpreter')
         self.settings = GCodeConfig(**self.read_defaults(GCodeConfig()))
         self.settings.validate()
-        # Geometry and material come from G-code; orientation comes from GCodeConfig.
-        supplied = {'path_length_mm', 'nozzle_rpy_deg', 'filament_per_mm'}
-        config = MotionConfig(**self.read_defaults(MotionConfig(), excluded=supplied))
+        # The nozzle orientation comes from GCodeConfig.
+        config = MotionConfig(**self.read_defaults(MotionConfig(), excluded={'nozzle_rpy_deg'}))
         planner = GCodePlanner(self.settings, config)
-        self.active_path = None
-        self.active_segment = None
         self.initialize_execution(planner.config, planner)
-        self.base_config = self.config
+        # E-only moves are counted by the firmware, not timed by this node.
+        self.move_publisher = None
+        if not self.config.dry_run:
+            self.move_publisher = self.create_publisher(Float32MultiArray, '/stepper/move', 1)
         self.last_planning_log = 0.0
         legacy = self.declare_parameter('split_threshold', -1.0).value
         if legacy != -1.0:
@@ -60,10 +57,6 @@ class GCodeInterpreter(MotionExecutor):
             ).value
         return values
 
-    def steps_per_mm(self, extrusion_speed_mmps):
-        """Expose the shared calibration for callers of the previous interpreter."""
-        return steps_per_mm(extrusion_speed_mmps)
-
     def request_stop(self, message):
         """Stop in place and cancel; never skip a segment or return HOME implicitly."""
         if message.data:
@@ -87,104 +80,32 @@ class GCodeInterpreter(MotionExecutor):
             self.get_logger().info(f'Preflighting segment {index + 1}/{total}')
             self.last_planning_log = now
 
-    def configure_step(self, step):
-        """Bind the motion executor to this step's material and geometry."""
-        segment = step.segment
-        self.extrusion_direction = 1.0
-        self.config = self.base_config
-        self.active_path = step.path
-        self.active_segment = segment
-        if segment is None or step.motion is None:
-            return
-        if step.path is not None:
-            length = step.path.length_mm
-            self.config = replace(
-                self.base_config, path_length_mm=length,
-                filament_per_mm=float(step.path.material[-1]) / length,
-                progress_threshold_mm=min(self.base_config.progress_threshold_mm, length / 10),
-            )
-            self.extrusion_direction = step.path.direction
-            return
-        length = segment.length_mm
-        self.config = replace(
-            self.base_config, path_length_mm=length,
-            filament_per_mm=abs(segment.delta_e) / length,
-            progress_threshold_mm=min(self.base_config.progress_threshold_mm, length / 10),
-        )
-        self.extrusion_direction = math.copysign(1.0, segment.delta_e)
-
-    def reset_extrusion(self):
-        """Reset once per action; retain material history across all source boundaries."""
-        super().reset_extrusion()
-        self.last_desired_time = None
-        self.controller_clock_started = False
-        if self.active_path is not None and self.active_path.material[-1] > 0:
-            self.extrusion_sync = ProgressExtrusion(
-                1.0, float(self.active_path.material[-1]), self.config.extrusion_smoothing_s,
-            )
-
-    def on_feedback(self, message, printing):
-        """Allow UR's first feedback cycle to replace the preceding desired state."""
-        if self.active_path is not None and printing and not self.controller_clock_started:
-            # The scaled UR controller reports last_commanded_state_ as desired on
-            # its first cycle. Its time may still belong to the previous action.
-            self.controller_clock_started = True
-            self.feedback_received = time.monotonic()
-            return
-        super().on_feedback(message, printing)
-
-    def feedback_progress(self, joints, feedback):
-        """Use actual TCP progress; controller time only selects the path branch."""
-        path = self.active_path
-        if path is None:
-            segment = self.active_segment
-            start, end = np.asarray(segment.start), np.asarray(segment.end)
-            self.planner.check_pose(joints, start, end)
-            position = self.planner.nozzle_position(joints)
-            direction = (end - start) / segment.length_mm
-            progress = float((position - start) @ direction)
-            return progress, progress
-        stamp = feedback.desired.time_from_start
-        desired_time = stamp.sec + stamp.nanosec / 1e9
-        if self.last_desired_time is not None and desired_time < self.last_desired_time - 1e-9:
-            raise ValueError('Controller trajectory time moved backwards')
-        self.last_desired_time = desired_time
-        position = self.planner.nozzle_position(joints)
-        progress, material, interval = path.project(
-            position, desired_time, self.settings.trajectory_tracking_window_mm,
-        )
-        nearest = path.closest_source_point(position, interval)
-        self.planner.check_pose(joints, nearest, nearest)
-        return progress, material
-
     def execute_timed(self, step):
-        """Execute E-only or dwell without blocking callbacks; always finish at zero."""
+        """Run a firmware-counted E-only move or a dwell; always finish at zero."""
         self.check_interrupted()
-        speed = step.extrusion_steps_s if step.duration_s > 0 else 0.0
+        moving = step.extrusion_steps != 0
         if not self.joints_fresh():
             raise RuntimeError('Joint feedback is stale before timed action')
-        if speed and self.speed_publisher.get_subscription_count() == 0:
-            raise RuntimeError('Extruder subscriber disconnected')
+        if moving and self.move_publisher.get_subscription_count() == 0:
+            raise RuntimeError('Extruder move subscriber disconnected')
+        # The firmware stops itself after the counted pulses. Also wait out transport
+        # jitter, so the zero below or the next speed command cannot truncate the move.
+        duration = step.duration_s + (self.settings.extrusion_move_margin_s if moving else 0.0)
         try:
-            self.set_extrusion(speed, force=True)
-            deadline = time.monotonic() + step.duration_s
+            if moving:
+                self.move_publisher.publish(Float32MultiArray(
+                    data=[float(step.extrusion_steps), abs(step.extrusion_steps_s)],
+                ))
+            deadline = time.monotonic() + duration
             while time.monotonic() < deadline:
                 self.check_interrupted()
                 if not self.joints_fresh():
                     raise RuntimeError('Joint feedback became stale during timed action')
-                if speed and self.speed_publisher.get_subscription_count() == 0:
-                    raise RuntimeError('Extruder subscriber disconnected')
+                if moving and self.move_publisher.get_subscription_count() == 0:
+                    raise RuntimeError('Extruder move subscriber disconnected')
                 rclpy.spin_once(self, timeout_sec=min(0.01, max(0.0, deadline - time.monotonic())))
         finally:
             self.set_extrusion(0.0, force=True)
-
-    def update_print_extrusion(self, now):
-        """Reject measured feed above the configured material limit before publishing."""
-        feed = self.extrusion_sync.filament_speed_mm_s
-        if feed > self.settings.max_extrusion_speed_mm_s:
-            self.set_extrusion(0.0, force=True)
-            raise RuntimeError(f'Measured filament demand {feed:.3f} mm/s exceeds the feed limit')
-        super().update_print_extrusion(now)
 
     def run(self):
         """Parse and plan every step before enabling execution of the first motion."""
@@ -197,6 +118,13 @@ class GCodeInterpreter(MotionExecutor):
                 f'{command}: ignored by explicit ignored_commands configuration '
                 f'({len(lines)} occurrences, first line {lines[0]}). '
                 'Homing/heating/cooling is externally managed; no command or wait is performed.'
+            )
+        if self.planner.bed is None:
+            self.get_logger().warn('No bed_probe_file: Z uses the flat z_offset.')
+        else:
+            self.get_logger().info(
+                f'Bed surface: {self.planner.bed.describe()}; bed_z_adjust_mm '
+                f'{cfg.bed_z_adjust_mm:+g}. Probe again whenever the bed has been moved.'
             )
         if self.config.dry_run:
             seed = np.deg2rad(self.config.dry_run_seed_deg)
@@ -222,6 +150,10 @@ class GCodeInterpreter(MotionExecutor):
         if any(segment.delta_e != 0 for segment in segments) and cfg.extrusion_scale_factor:
             self.wait_until(lambda: self.speed_publisher.get_subscription_count() > 0,
                             self.config.startup_timeout_s, 'extruder subscriber')
+        if any(step.extrusion_steps for step in steps):
+            self.wait_until(lambda: self.move_publisher.get_subscription_count() > 0,
+                            self.config.startup_timeout_s,
+                            '/stepper/move subscriber (flash the updated DRV8825_microros)')
         previous_sample = self.joint_received
         self.wait_until(lambda: self.joint_received != previous_sample and self.joints_fresh(),
                         self.config.startup_timeout_s, 'joint feedback after planning')
@@ -230,11 +162,10 @@ class GCodeInterpreter(MotionExecutor):
             if step.path is not None:
                 line = f'{step.path.segments[0].source_line}-{step.path.segments[-1].source_line}'
             self.get_logger().info(f'Action {index}/{len(steps)}, source line {line}')
-            self.configure_step(step)
             if step.motion is None:
                 self.execute_timed(step)
             else:
-                self.execute_motion(step.motion)
+                self.execute_motion(step.motion, step.extrusion)
         self.get_logger().info('G-code completed; extrusion stopped and nozzle lifted.')
 
 

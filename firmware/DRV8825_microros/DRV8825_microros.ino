@@ -6,6 +6,7 @@
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 #include <std_msgs/msg/float32.h>
+#include <std_msgs/msg/float32_multi_array.h>
 
 // Portenta H7 M7: D13 = PA10 (DIR), D14 = PA9 (TIM1 channel 2, STEP).
 // Configure TIM1 directly. In Portenta core 4.6.0, pwmout_init_direct() falls
@@ -17,6 +18,8 @@ constexpr int STEP_PIN_FUNCTION =
 constexpr float MAX_STEPPER_SPEED = 64000.0f;
 // Keep TIM1's 16-bit counter/prescaler within range even at a 480 MHz clock.
 constexpr uint32_t MAX_STEP_PERIOD_US = 8000000;
+// TIM1's 16-bit repetition counter ends a counted move after RCR + 1 pulses.
+constexpr double MAX_MOVE_STEPS = 65536.0;
 
 gpio_t step_gpio;
 gpio_t direction_gpio;
@@ -24,6 +27,7 @@ uint32_t step_timer_ticks_per_us = 0;
 uint32_t step_prescaler_divider = 1;
 uint32_t step_period_us = 0;
 bool step_direction_positive = true;
+bool step_counted_move = false;
 
 void init_stepper_timer() {
   gpio_init_out_ex(&step_gpio, STEP_PIN, 0);
@@ -40,10 +44,10 @@ void init_stepper_timer() {
     : ((pclk2 == hclk) ? pclk2 : pclk2 * 2);
   step_timer_ticks_per_us = timer_clock / 1000000;
 
-  // PWM mode 1 on channel 2, with buffered ARR/CCR updates. Keep the timer
-  // stopped and STEP in GPIO-low mode until a nonzero ROS command arrives.
+  // PWM mode 2: STEP stays low then high, ending each period on a falling edge.
+  // Keep STEP low and the timer stopped until a nonzero ROS command arrives.
   TIM1->CR1 = TIM_CR1_ARPE;
-  TIM1->CCMR1 = TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2PE;
+  TIM1->CCMR1 = TIM_CCMR1_OC2M_0 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2PE;
   TIM1->CCER = TIM_CCER_CC2E;
   TIM1->BDTR = TIM_BDTR_MOE;
 }
@@ -51,70 +55,106 @@ void init_stepper_timer() {
 void stop_stepper() {
   // Disconnect the timer and actively drive STEP low, even mid-period.
   gpio_init_out_ex(&step_gpio, STEP_PIN, 0);
-  TIM1->CR1 &= ~TIM_CR1_CEN;
+  TIM1->CR1 &= ~(TIM_CR1_CEN | TIM_CR1_OPM);
+  TIM1->RCR = 0;
   step_period_us = 0;
+  step_counted_move = false;
 }
 
-void set_stepper_speed(float speed_steps_s) {
-  if (!std::isfinite(speed_steps_s) || speed_steps_s == 0.0f) {
-    stop_stepper();
-    return;
-  }
-
-  double speed = std::fabs(static_cast<double>(speed_steps_s));
+// Convert a pulse rate to a period and prescaler divider; false if unrepresentable.
+bool step_timing(double speed, uint32_t &period_us, uint32_t &divider) {
   if (speed > MAX_STEPPER_SPEED) {
     speed = MAX_STEPPER_SPEED;
   }
   const double requested_period = 1000000.0 / speed;
   if (requested_period > MAX_STEP_PERIOD_US) {
     // Rates below 0.125 pulses/s cannot be represented by this configuration.
-    stop_stepper();
-    return;
+    return false;
   }
-  const uint32_t period_us = static_cast<uint32_t>(std::lround(requested_period));
-  uint32_t divider = 1;
+  period_us = static_cast<uint32_t>(std::lround(requested_period));
+  divider = 1;
   while ((period_us - 1) / divider > 0xFFFF) {
     divider *= 2;
   }
+  return step_timer_ticks_per_us != 0 && step_timer_ticks_per_us * divider <= 65536;
+}
+
+// Restart TIM1 from a known state. move_steps > 0 makes the hardware stop
+// after exactly that many pulses; 0 runs until the next command.
+void start_stepper(uint32_t period_us, uint32_t divider, bool positive, uint32_t move_steps) {
   const uint32_t counter_period = (period_us - 1) / divider + 1;
-  if (step_timer_ticks_per_us == 0 || step_timer_ticks_per_us * divider > 65536) {
+  stop_stepper();
+  wait_us(2);  // Preserve DIR hold time after the last STEP rising edge.
+  gpio_write(&direction_gpio, positive ? 1 : 0);
+  TIM1->PSC = step_timer_ticks_per_us * divider - 1;
+  TIM1->ARR = counter_period - 1;
+  TIM1->CCR2 = counter_period / 2;
+  TIM1->RCR = move_steps ? move_steps - 1 : 0;
+  TIM1->CNT = 0;
+  TIM1->EGR = TIM_EGR_UG;  // Load PSC, ARR, CCR2 and the repetition counter.
+  if (move_steps) {
+    // One-pulse mode clears CEN at the update event after RCR + 1 periods.
+    TIM1->CR1 |= TIM_CR1_OPM;
+  }
+  wait_us(2);  // DRV8825 DIR setup time is at least 650 ns.
+  pin_function(STEP_PIN, STEP_PIN_FUNCTION);
+  TIM1->CR1 |= TIM_CR1_CEN;
+  step_period_us = period_us;
+  step_prescaler_divider = divider;
+  step_direction_positive = positive;
+  step_counted_move = move_steps != 0;
+}
+
+void set_stepper_speed(float speed_steps_s) {
+  uint32_t period_us = 0;
+  uint32_t divider = 1;
+  if (!std::isfinite(speed_steps_s) || speed_steps_s == 0.0f ||
+      !step_timing(std::fabs(static_cast<double>(speed_steps_s)), period_us, divider)) {
     stop_stepper();
     return;
   }
   const bool positive = speed_steps_s > 0.0f;
 
   mbed::CriticalSectionLock lock;
-  if (step_period_us != 0 && positive == step_direction_positive &&
+  if (step_period_us != 0 && !step_counted_move && positive == step_direction_positive &&
       divider == step_prescaler_divider) {
     // Latch period and duty together at the next overflow, without restarting
     // the counter. Repeated ROS updates must not add pulses or reset phase.
+    const uint32_t counter_period = (period_us - 1) / divider + 1;
     TIM1->CR1 |= TIM_CR1_UDIS;
     TIM1->ARR = counter_period - 1;
     TIM1->CCR2 = counter_period / 2;
     TIM1->CR1 &= ~TIM_CR1_UDIS;
+    step_period_us = period_us;
   } else {
-    // Startup, direction reversal, or a change of hardware prescaler.
-    stop_stepper();
-    wait_us(2);  // Preserve DIR hold time after the last STEP rising edge.
-    gpio_write(&direction_gpio, positive ? 1 : 0);
-    TIM1->PSC = step_timer_ticks_per_us * divider - 1;
-    TIM1->ARR = counter_period - 1;
-    TIM1->CCR2 = counter_period / 2;
-    TIM1->CNT = 0;
-    TIM1->EGR = TIM_EGR_UG;
-    wait_us(2);  // DRV8825 DIR setup time is at least 650 ns.
-    pin_function(STEP_PIN, STEP_PIN_FUNCTION);
-    TIM1->CR1 |= TIM_CR1_CEN;
+    // Startup, direction reversal, prescaler change, or after a counted move.
+    start_stepper(period_us, divider, positive, 0);
   }
   // At the maximum rate both STEP high/low exceed the required 1.9 us.
-  step_period_us = period_us;
-  step_prescaler_divider = divider;
-  step_direction_positive = positive;
+}
+
+// Emit exactly |steps| pulses at the given rate, then stop in hardware.
+// Invalid requests stop the motor instead of approximating a material amount.
+void move_stepper(float steps, float speed_steps_s) {
+  uint32_t period_us = 0;
+  uint32_t divider = 1;
+  const double count = std::fabs(static_cast<double>(steps));
+  if (!std::isfinite(steps) || !std::isfinite(speed_steps_s) || speed_steps_s <= 0.0f ||
+      count < 1.0 || count > MAX_MOVE_STEPS || count != std::floor(count) ||
+      !step_timing(speed_steps_s, period_us, divider)) {
+    stop_stepper();
+    return;
+  }
+  mbed::CriticalSectionLock lock;
+  start_stepper(period_us, divider, steps > 0.0f, static_cast<uint32_t>(count));
 }
 
 // Micro-ROS variables
 rcl_subscription_t subscriber;
+rcl_subscription_t move_subscriber;
 std_msgs__msg__Float32 speed_msg;
+std_msgs__msg__Float32MultiArray move_msg;
+float move_data[2];
 rclc_executor_t executor;
 rclc_support_t support;
 rcl_allocator_t allocator;
@@ -136,7 +176,19 @@ void speed_callback(const void *msgin) {
   const std_msgs__msg__Float32 *msg = (const std_msgs__msg__Float32 *)msgin;
   set_stepper_speed(msg->data);
   digitalWrite(LEDG, LOW);  // At least one speed command reached the board.
-  // USB serial is reserved for micro-ROS; do not print debug text here.
+}
+
+// Callback accepts [signed STEP pulses, pulses per second]. TIM1 counts the
+// pulses, so transport delay changes only when a move starts, not its length.
+void move_callback(const void *msgin) {
+  const std_msgs__msg__Float32MultiArray *msg =
+    (const std_msgs__msg__Float32MultiArray *)msgin;
+  if (msg->data.size == 2) {
+    move_stepper(msg->data.data[0], msg->data.data[1]);
+  } else {
+    stop_stepper();
+  }
+  digitalWrite(LEDG, LOW);
 }
 
 void setup() {
@@ -151,6 +203,11 @@ void setup() {
   sleep_manager_lock_deep_sleep();
   set_microros_transports();
 
+  // Static storage for [steps, rate]; longer arrays fail to deserialize and are dropped.
+  move_msg.data.data = move_data;
+  move_msg.data.capacity = 2;
+  move_msg.data.size = 0;
+
   allocator = rcl_get_default_allocator();
 
   if (!check_ros_init(rclc_support_init(&support, 0, NULL, &allocator))) return;
@@ -162,10 +219,18 @@ void setup() {
     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
     "stepper/speed"
   ))) return;
+  if (!check_ros_init(rclc_subscription_init_default(
+    &move_subscriber,
+    &node,
+    ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
+    "stepper/move"
+  ))) return;
 
-  if (!check_ros_init(rclc_executor_init(&executor, &support.context, 1, &allocator))) return;
+  if (!check_ros_init(rclc_executor_init(&executor, &support.context, 2, &allocator))) return;
   if (!check_ros_init(rclc_executor_add_subscription(
       &executor, &subscriber, &speed_msg, &speed_callback, ON_NEW_DATA))) return;
+  if (!check_ros_init(rclc_executor_add_subscription(
+      &executor, &move_subscriber, &move_msg, &move_callback, ON_NEW_DATA))) return;
   ros_ready = true;
   digitalWrite(LEDB, HIGH);
 }

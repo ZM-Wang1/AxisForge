@@ -3,22 +3,24 @@ gcode_interpreter:
     # G-code coordinates -> robot Base, mm; keeps the previous placement convention.
     origin_at_center: true
     bed_size_mm: [235.0, 235.0]
-    x_offset: -778.0
-    y_offset: -362.0
-    z_offset: 196.42
+    # X/Y offset = measured - 235
+    x_offset: -822.13
+    y_offset: -504.78
+    z_offset: 98.20                  # Flat bed height; with a bed probe only bed_probe's guess
+    bed_probe_file: src/axisforge_bringup/config/bed_probe.yaml
+    bed_z_adjust_mm: 0.0             # First-layer fine adjust; + raises the nozzle
+    bed_probe_extrapolation_mm: 5.0  # Allowed XY distance beyond the probed points
     wrist_angle: 90.0
     nozzle_roll_deg: 180.0
     nozzle_pitch_deg: 0.0
-    # Measured nozzle offset in tool0 coordinates. Zero preserves legacy tool0 targets.
-    # With a nonzero TCP, the XYZ offsets above must locate the NOZZLE tip on the bed.
-    tcp_offset_mm: [0.0, 0.0, 0.0]
+    tcp_offset_mm: [-65.73, 3.56, 99.38]
 
     print_speed_multiplier: 1.0
     extrusion_scale_factor: 1.0       # 0 disables extrusion, including E-only moves
     first_layer_speed_factor: 1.0
     first_layer_height_mm: 0.4       # Fallback only when ;LAYER metadata is absent
     max_print_speed_mm_s: 100.0      # Limits apply AFTER speed multipliers
-    max_travel_speed_mm_s: 20.0
+    max_travel_speed_mm_s: 100.0
     max_extrusion_speed_mm_s: 45.0
     minimum_segment_duration_s: 0.10
 
@@ -28,7 +30,6 @@ gcode_interpreter:
     corner_blend_tolerance_mm: 0.05  # Must be smaller than path_tolerance_mm
     max_corner_speed_mm_s: 10.0
     max_continuous_points: 100000    # Oversized runs fail preflight, never split silently
-    trajectory_tracking_window_mm: 2.0  # Local actual-TCP search around controller path time
 
     # Replaces split_threshold. Full cubic interpolation is checked between IK samples.
     waypoint_spacing_mm: 1.0
@@ -50,10 +51,10 @@ gcode_interpreter:
     stall_timeout_s: 2.0
     execution_timeout_factor: 3.0
     cancel_timeout_s: 3.0
-    progress_threshold_mm: 0.02
-    extrusion_smoothing_s: 0.10
-    extrusion_update_period_s: 0.05
-    extrusion_feedback_timeout_s: 0.25
+    # Feed-forward E planned with the trajectory at 185.2 steps/mm; pendant speed slider 100 %.
+    extrusion_update_period_s: 0.01   # /stepper/speed command period and profile sampling
+    extrusion_move_margin_s: 0.10     # Extra wait after firmware-counted E-only moves
+    pressure_advance_s: 0.08          # Klipper pressure_advance K; 0 = E in sync with motion
 
     # Explicit compatibility policy: these are externally managed, NOT executed or waited for.
     # Each encountered code is reported. Remove codes to reject them during preflight.

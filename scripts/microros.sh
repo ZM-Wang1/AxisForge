@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Serial bridge for the UR16e printing system's Portenta extruder.
-# The Agent is robot-independent; the firmware subscribes to /stepper/speed.
+# The Agent is robot-independent; the firmware subscribes to /stepper/speed
+# (continuous rate) and /stepper/move (exact step-counted E-only moves).
 set -eo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"

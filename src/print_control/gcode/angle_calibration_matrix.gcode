@@ -1,0 +1,1503 @@
+; Nozzle angle calibration test matrix
+; Firmware profile: marlin; bed: rectangular 220 × 220 mm
+; Pattern centered at X117.5 Y117.5 (generator X110 Y110 shifted to the 235 mm bed center); origin at bed center: false
+; Bed orientation: height columns increase left-to-right (+X); minimum flow is at +Y, increasing flow runs toward -Y.
+; Matrix: 7 flow rows × 6 layer-height columns; 42 specimens; 3 layers per specimen.
+; Print order: complete each layer-height column from minimum to maximum; flow increases within each column.
+; Nozzle tilt 0 degrees from vertical; rotary axis A rotates about X.
+; Selected rotary axis: A (rotation about X).
+; Flow labels are percentages: 90% to 120% in 5% increments.
+; Layer-height labels are millimeters: 0.1 to 0.35 mm in 0.05 mm increments; maximum is 1.5 × nozzle-hole diameter.
+; Collision-safe minimum height at this angle: 0 mm; physical nozzle tip diameter 0.8 mm.
+; Nozzle outlet diameter 0.4 mm sets test-line extrusion width and Slic3r wall spacing.
+; Specimen walls: 1; Slic3r centerline spacing varies by layer height; nominal extrusion width 0.4 mm.
+; One solid first-layer base connects the matrix labels and all test lines. No individual skirts are printed.
+; Base height 0.24 mm; base line width 0.6 mm; label layer 0.1 mm.
+; Seven-segment labels: 4 mm high; minimum inter-character clearance 0.3 mm.
+; Bead area: A = (w-h)h + pi(h/2)^2. E uses area * distance * flow percentage / filament area.
+; Adjacent center spacing = extrusion width - layer height * (1 - pi/4); walls overlap nominally to avoid gaps.
+; Travel feedrate fixed at 6000 mm/min.
+; Retract 0.5 mm at 35 mm/s; Z-hop 0.1 mm.
+; Purge path length 96.1 mm per pass (192.2 mm total), with a 0.8 mm return pass, printed before the base.
+; Pressure advance fixed at 0.04.
+; Review firmware support, bed limits, start/end macros, and nozzle clearance before printing.
+G21 ; units in mm
+G90 ; absolute XYZ positioning
+M83 ; relative extrusion
+G92 E0
+G28 ; home axes
+M140 S60 ; set bed temperature
+M190 S60 ; wait for bed
+M104 S210 ; set hotend temperature
+M109 S210 ; wait for hotend
+
+; DOUBLE-PASS PURGE | 96.1 mm each way at 200% flow, separate from matrix base and samples
+G0 X69.35 Y91.85 Z2.39 F6000 ; start above the purge line
+G0 X69.35 Y91.85 F6000
+G0 Z0.24
+G1 X165.45 Y91.85 E6.683376 F1800
+G0 X165.45 Y91.05 F6000 ; reposition for return purge pass without extrusion
+G1 X69.35 Y91.05 E6.683376 F1800
+
+; SOLID MATRIX BASE | one connected first layer, no per-line skirts
+; Base infill is one continuous snake: alternate row direction and extrude the edge connectors.
+M106 S0 ; fan 0%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X69.65 Y143.85 F6000
+G0 Z0.24
+G1 E0.5 F1800 ; unretract
+G1 X165.15 Y143.85 E5.22662992 F1800
+G1 X165.15 Y143.304023 E0.02988084 F1800
+G1 X69.65 Y143.304023 E5.22662992 F1800
+G1 X69.65 Y142.758046 E0.02988084 F1800
+G1 X165.15 Y142.758046 E5.22662992 F1800
+G1 X165.15 Y142.212069 E0.02988084 F1800
+G1 X69.65 Y142.212069 E5.22662992 F1800
+G1 X69.65 Y141.666092 E0.02988084 F1800
+G1 X165.15 Y141.666092 E5.22662992 F1800
+G1 X165.15 Y141.120115 E0.02988084 F1800
+G1 X69.65 Y141.120115 E5.22662992 F1800
+G1 X69.65 Y140.574138 E0.02988084 F1800
+G1 X165.15 Y140.574138 E5.22662992 F1800
+G1 X165.15 Y140.028161 E0.02988084 F1800
+G1 X69.65 Y140.028161 E5.22662992 F1800
+G1 X69.65 Y139.482184 E0.02988084 F1800
+G1 X165.15 Y139.482184 E5.22662992 F1800
+G1 X165.15 Y138.936207 E0.02988084 F1800
+G1 X69.65 Y138.936207 E5.22662992 F1800
+G1 X69.65 Y138.39023 E0.02988084 F1800
+G1 X165.15 Y138.39023 E5.22662992 F1800
+G1 X165.15 Y137.844253 E0.02988084 F1800
+G1 X69.65 Y137.844253 E5.22662992 F1800
+G1 X69.65 Y137.298276 E0.02988084 F1800
+G1 X165.15 Y137.298276 E5.22662992 F1800
+G1 X165.15 Y136.752299 E0.02988084 F1800
+G1 X69.65 Y136.752299 E5.22662992 F1800
+G1 X69.65 Y136.206322 E0.02988084 F1800
+G1 X165.15 Y136.206322 E5.22662992 F1800
+G1 X165.15 Y135.660345 E0.02988084 F1800
+G1 X69.65 Y135.660345 E5.22662992 F1800
+G1 X69.65 Y135.114368 E0.02988084 F1800
+G1 X165.15 Y135.114368 E5.22662992 F1800
+G1 X165.15 Y134.568391 E0.02988084 F1800
+G1 X69.65 Y134.568391 E5.22662992 F1800
+G1 X69.65 Y134.022414 E0.02988084 F1800
+G1 X165.15 Y134.022414 E5.22662992 F1800
+G1 X165.15 Y133.476437 E0.02988084 F1800
+G1 X69.65 Y133.476437 E5.22662992 F1800
+G1 X69.65 Y132.93046 E0.02988084 F1800
+G1 X165.15 Y132.93046 E5.22662992 F1800
+G1 X165.15 Y132.384483 E0.02988084 F1800
+G1 X69.65 Y132.384483 E5.22662992 F1800
+G1 X69.65 Y131.838506 E0.02988084 F1800
+G1 X165.15 Y131.838506 E5.22662992 F1800
+G1 X165.15 Y131.292529 E0.02988084 F1800
+G1 X69.65 Y131.292529 E5.22662992 F1800
+G1 X69.65 Y130.746552 E0.02988084 F1800
+G1 X165.15 Y130.746552 E5.22662992 F1800
+G1 X165.15 Y130.200575 E0.02988084 F1800
+G1 X69.65 Y130.200575 E5.22662992 F1800
+G1 X69.65 Y129.654598 E0.02988084 F1800
+G1 X165.15 Y129.654598 E5.22662992 F1800
+G1 X165.15 Y129.108621 E0.02988084 F1800
+G1 X69.65 Y129.108621 E5.22662992 F1800
+G1 X69.65 Y128.562644 E0.02988084 F1800
+G1 X165.15 Y128.562644 E5.22662992 F1800
+G1 X165.15 Y128.016667 E0.02988084 F1800
+G1 X69.65 Y128.016667 E5.22662992 F1800
+G1 X69.65 Y127.47069 E0.02988084 F1800
+G1 X165.15 Y127.47069 E5.22662992 F1800
+G1 X165.15 Y126.924713 E0.02988084 F1800
+G1 X69.65 Y126.924713 E5.22662992 F1800
+G1 X69.65 Y126.378736 E0.02988084 F1800
+G1 X165.15 Y126.378736 E5.22662992 F1800
+G1 X165.15 Y125.832759 E0.02988084 F1800
+G1 X69.65 Y125.832759 E5.22662992 F1800
+G1 X69.65 Y125.286782 E0.02988084 F1800
+G1 X165.15 Y125.286782 E5.22662992 F1800
+G1 X165.15 Y124.740805 E0.02988084 F1800
+G1 X69.65 Y124.740805 E5.22662992 F1800
+G1 X69.65 Y124.194828 E0.02988084 F1800
+G1 X165.15 Y124.194828 E5.22662992 F1800
+G1 X165.15 Y123.648851 E0.02988084 F1800
+G1 X69.65 Y123.648851 E5.22662992 F1800
+G1 X69.65 Y123.102874 E0.02988084 F1800
+G1 X165.15 Y123.102874 E5.22662992 F1800
+G1 X165.15 Y122.556897 E0.02988084 F1800
+G1 X69.65 Y122.556897 E5.22662992 F1800
+G1 X69.65 Y122.01092 E0.02988084 F1800
+G1 X165.15 Y122.01092 E5.22662992 F1800
+G1 X165.15 Y121.464943 E0.02988084 F1800
+G1 X69.65 Y121.464943 E5.22662992 F1800
+G1 X69.65 Y120.918966 E0.02988084 F1800
+G1 X165.15 Y120.918966 E5.22662992 F1800
+G1 X165.15 Y120.372989 E0.02988084 F1800
+G1 X69.65 Y120.372989 E5.22662992 F1800
+G1 X69.65 Y119.827011 E0.02988084 F1800
+G1 X165.15 Y119.827011 E5.22662992 F1800
+G1 X165.15 Y119.281034 E0.02988084 F1800
+G1 X69.65 Y119.281034 E5.22662992 F1800
+G1 X69.65 Y118.735057 E0.02988084 F1800
+G1 X165.15 Y118.735057 E5.22662992 F1800
+G1 X165.15 Y118.18908 E0.02988084 F1800
+G1 X69.65 Y118.18908 E5.22662992 F1800
+G1 X69.65 Y117.643103 E0.02988084 F1800
+G1 X165.15 Y117.643103 E5.22662992 F1800
+G1 X165.15 Y117.097126 E0.02988084 F1800
+G1 X69.65 Y117.097126 E5.22662992 F1800
+G1 X69.65 Y116.551149 E0.02988084 F1800
+G1 X165.15 Y116.551149 E5.22662992 F1800
+G1 X165.15 Y116.005172 E0.02988084 F1800
+G1 X69.65 Y116.005172 E5.22662992 F1800
+G1 X69.65 Y115.459195 E0.02988084 F1800
+G1 X165.15 Y115.459195 E5.22662992 F1800
+G1 X165.15 Y114.913218 E0.02988084 F1800
+G1 X69.65 Y114.913218 E5.22662992 F1800
+G1 X69.65 Y114.367241 E0.02988084 F1800
+G1 X165.15 Y114.367241 E5.22662992 F1800
+G1 X165.15 Y113.821264 E0.02988084 F1800
+G1 X69.65 Y113.821264 E5.22662992 F1800
+G1 X69.65 Y113.275287 E0.02988084 F1800
+G1 X165.15 Y113.275287 E5.22662992 F1800
+G1 X165.15 Y112.72931 E0.02988084 F1800
+G1 X69.65 Y112.72931 E5.22662992 F1800
+G1 X69.65 Y112.183333 E0.02988084 F1800
+G1 X165.15 Y112.183333 E5.22662992 F1800
+G1 X165.15 Y111.637356 E0.02988084 F1800
+G1 X69.65 Y111.637356 E5.22662992 F1800
+G1 X69.65 Y111.091379 E0.02988084 F1800
+G1 X165.15 Y111.091379 E5.22662992 F1800
+G1 X165.15 Y110.545402 E0.02988084 F1800
+G1 X69.65 Y110.545402 E5.22662992 F1800
+G1 X69.65 Y109.999425 E0.02988084 F1800
+G1 X165.15 Y109.999425 E5.22662992 F1800
+G1 X165.15 Y109.453448 E0.02988084 F1800
+G1 X69.65 Y109.453448 E5.22662992 F1800
+G1 X69.65 Y108.907471 E0.02988084 F1800
+G1 X165.15 Y108.907471 E5.22662992 F1800
+G1 X165.15 Y108.361494 E0.02988084 F1800
+G1 X69.65 Y108.361494 E5.22662992 F1800
+G1 X69.65 Y107.815517 E0.02988084 F1800
+G1 X165.15 Y107.815517 E5.22662992 F1800
+G1 X165.15 Y107.26954 E0.02988084 F1800
+G1 X69.65 Y107.26954 E5.22662992 F1800
+G1 X69.65 Y106.723563 E0.02988084 F1800
+G1 X165.15 Y106.723563 E5.22662992 F1800
+G1 X165.15 Y106.177586 E0.02988084 F1800
+G1 X69.65 Y106.177586 E5.22662992 F1800
+G1 X69.65 Y105.631609 E0.02988084 F1800
+G1 X165.15 Y105.631609 E5.22662992 F1800
+G1 X165.15 Y105.085632 E0.02988084 F1800
+G1 X69.65 Y105.085632 E5.22662992 F1800
+G1 X69.65 Y104.539655 E0.02988084 F1800
+G1 X165.15 Y104.539655 E5.22662992 F1800
+G1 X165.15 Y103.993678 E0.02988084 F1800
+G1 X69.65 Y103.993678 E5.22662992 F1800
+G1 X69.65 Y103.447701 E0.02988084 F1800
+G1 X165.15 Y103.447701 E5.22662992 F1800
+G1 X165.15 Y102.901724 E0.02988084 F1800
+G1 X69.65 Y102.901724 E5.22662992 F1800
+G1 X69.65 Y102.355747 E0.02988084 F1800
+G1 X165.15 Y102.355747 E5.22662992 F1800
+G1 X165.15 Y101.80977 E0.02988084 F1800
+G1 X69.65 Y101.80977 E5.22662992 F1800
+G1 X69.65 Y101.263793 E0.02988084 F1800
+G1 X165.15 Y101.263793 E5.22662992 F1800
+G1 X165.15 Y100.717816 E0.02988084 F1800
+G1 X69.65 Y100.717816 E5.22662992 F1800
+G1 X69.65 Y100.171839 E0.02988084 F1800
+G1 X165.15 Y100.171839 E5.22662992 F1800
+G1 X165.15 Y99.625862 E0.02988084 F1800
+G1 X69.65 Y99.625862 E5.22662992 F1800
+G1 X69.65 Y99.079885 E0.02988084 F1800
+G1 X165.15 Y99.079885 E5.22662992 F1800
+G1 X165.15 Y98.533908 E0.02988084 F1800
+G1 X69.65 Y98.533908 E5.22662992 F1800
+G1 X69.65 Y97.987931 E0.02988084 F1800
+G1 X165.15 Y97.987931 E5.22662992 F1800
+G1 X165.15 Y97.441954 E0.02988084 F1800
+G1 X69.65 Y97.441954 E5.22662992 F1800
+G1 X69.65 Y96.895977 E0.02988084 F1800
+G1 X165.15 Y96.895977 E5.22662992 F1800
+G1 X165.15 Y96.35 E0.02988084 F1800
+G1 X69.65 Y96.35 E5.22662992 F1800
+
+; MATRIX LABELS | angle at upper left, heights across the top, flow percentages down the left
+; angle label 0°
+; Continuous marker strokes for 0°; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X70.85 Y142.65 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X73.25 Y142.65 E0.03777086 F1800
+G0 X73.25 Y142.65 F6000 ; non-extruding move within this label
+G1 X73.25 Y140.65 E0.03147571 F1800
+G0 X73.25 Y140.65 F6000 ; non-extruding move within this label
+G1 X73.25 Y138.65 E0.03147571 F1800
+G0 X70.85 Y138.65 F6000 ; non-extruding move within this label
+G1 X73.25 Y138.65 E0.03777086 F1800
+G0 X70.85 Y140.65 F6000 ; non-extruding move within this label
+G1 X70.85 Y138.65 E0.03147571 F1800
+G0 X70.85 Y142.65 F6000 ; non-extruding move within this label
+G1 X70.85 Y140.65 E0.03147571 F1800
+G0 X74.03 Y142.65 F6000 ; non-extruding move within this label
+G1 X74.59 Y142.65 E0.0088132 F1800
+G0 X74.59 Y142.65 F6000 ; non-extruding move within this label
+G1 X74.59 Y142.09 E0.0088132 F1800
+G0 X74.59 Y142.09 F6000 ; non-extruding move within this label
+G1 X74.03 Y142.09 E0.0088132 F1800
+G0 X74.03 Y142.09 F6000 ; non-extruding move within this label
+G1 X74.03 Y142.65 E0.0088132 F1800
+; height label 0.1 mm
+; Continuous marker strokes for 0.1; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X85.35 Y142.65 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X87.75 Y142.65 E0.03777086 F1800
+G0 X87.75 Y142.65 F6000 ; non-extruding move within this label
+G1 X87.75 Y140.65 E0.03147571 F1800
+G0 X87.75 Y140.65 F6000 ; non-extruding move within this label
+G1 X87.75 Y138.65 E0.03147571 F1800
+G0 X85.35 Y138.65 F6000 ; non-extruding move within this label
+G1 X87.75 Y138.65 E0.03777086 F1800
+G0 X85.35 Y140.65 F6000 ; non-extruding move within this label
+G1 X85.35 Y138.65 E0.03147571 F1800
+G0 X85.35 Y142.65 F6000 ; non-extruding move within this label
+G1 X85.35 Y140.65 E0.03147571 F1800
+G0 X88.45 Y138.85 F6000 ; non-extruding move within this label
+G1 X88.93 Y138.85 E0.00755417 F1800
+G0 X91.55 Y142.65 F6000 ; non-extruding move within this label
+G1 X91.55 Y140.65 E0.03147571 F1800
+G0 X91.55 Y140.65 F6000 ; non-extruding move within this label
+G1 X91.55 Y138.65 E0.03147571 F1800
+; height label 0.15 mm
+; Continuous marker strokes for 0.15; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X97.8 Y142.65 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X100.2 Y142.65 E0.03777086 F1800
+G0 X100.2 Y142.65 F6000 ; non-extruding move within this label
+G1 X100.2 Y140.65 E0.03147571 F1800
+G0 X100.2 Y140.65 F6000 ; non-extruding move within this label
+G1 X100.2 Y138.65 E0.03147571 F1800
+G0 X97.8 Y138.65 F6000 ; non-extruding move within this label
+G1 X100.2 Y138.65 E0.03777086 F1800
+G0 X97.8 Y140.65 F6000 ; non-extruding move within this label
+G1 X97.8 Y138.65 E0.03147571 F1800
+G0 X97.8 Y142.65 F6000 ; non-extruding move within this label
+G1 X97.8 Y140.65 E0.03147571 F1800
+G0 X100.9 Y138.85 F6000 ; non-extruding move within this label
+G1 X101.38 Y138.85 E0.00755417 F1800
+G0 X104.0 Y142.65 F6000 ; non-extruding move within this label
+G1 X104.0 Y140.65 E0.03147571 F1800
+G0 X104.0 Y140.65 F6000 ; non-extruding move within this label
+G1 X104.0 Y138.65 E0.03147571 F1800
+G0 X104.7 Y142.65 F6000 ; non-extruding move within this label
+G1 X107.1 Y142.65 E0.03777086 F1800
+G0 X104.7 Y142.65 F6000 ; non-extruding move within this label
+G1 X104.7 Y140.65 E0.03147571 F1800
+G0 X104.7 Y140.65 F6000 ; non-extruding move within this label
+G1 X107.1 Y140.65 E0.03777086 F1800
+G0 X107.1 Y140.65 F6000 ; non-extruding move within this label
+G1 X107.1 Y138.65 E0.03147571 F1800
+G0 X104.7 Y138.65 F6000 ; non-extruding move within this label
+G1 X107.1 Y138.65 E0.03777086 F1800
+; height label 0.2 mm
+; Continuous marker strokes for 0.2; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X113.35 Y142.65 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X115.75 Y142.65 E0.03777086 F1800
+G0 X115.75 Y142.65 F6000 ; non-extruding move within this label
+G1 X115.75 Y140.65 E0.03147571 F1800
+G0 X115.75 Y140.65 F6000 ; non-extruding move within this label
+G1 X115.75 Y138.65 E0.03147571 F1800
+G0 X113.35 Y138.65 F6000 ; non-extruding move within this label
+G1 X115.75 Y138.65 E0.03777086 F1800
+G0 X113.35 Y140.65 F6000 ; non-extruding move within this label
+G1 X113.35 Y138.65 E0.03147571 F1800
+G0 X113.35 Y142.65 F6000 ; non-extruding move within this label
+G1 X113.35 Y140.65 E0.03147571 F1800
+G0 X116.45 Y138.85 F6000 ; non-extruding move within this label
+G1 X116.93 Y138.85 E0.00755417 F1800
+G0 X117.15 Y142.65 F6000 ; non-extruding move within this label
+G1 X119.55 Y142.65 E0.03777086 F1800
+G0 X119.55 Y142.65 F6000 ; non-extruding move within this label
+G1 X119.55 Y140.65 E0.03147571 F1800
+G0 X117.15 Y140.65 F6000 ; non-extruding move within this label
+G1 X119.55 Y140.65 E0.03777086 F1800
+G0 X117.15 Y140.65 F6000 ; non-extruding move within this label
+G1 X117.15 Y138.65 E0.03147571 F1800
+G0 X117.15 Y138.65 F6000 ; non-extruding move within this label
+G1 X119.55 Y138.65 E0.03777086 F1800
+; height label 0.25 mm
+; Continuous marker strokes for 0.25; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X125.8 Y142.65 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X128.2 Y142.65 E0.03777086 F1800
+G0 X128.2 Y142.65 F6000 ; non-extruding move within this label
+G1 X128.2 Y140.65 E0.03147571 F1800
+G0 X128.2 Y140.65 F6000 ; non-extruding move within this label
+G1 X128.2 Y138.65 E0.03147571 F1800
+G0 X125.8 Y138.65 F6000 ; non-extruding move within this label
+G1 X128.2 Y138.65 E0.03777086 F1800
+G0 X125.8 Y140.65 F6000 ; non-extruding move within this label
+G1 X125.8 Y138.65 E0.03147571 F1800
+G0 X125.8 Y142.65 F6000 ; non-extruding move within this label
+G1 X125.8 Y140.65 E0.03147571 F1800
+G0 X128.9 Y138.85 F6000 ; non-extruding move within this label
+G1 X129.38 Y138.85 E0.00755417 F1800
+G0 X129.6 Y142.65 F6000 ; non-extruding move within this label
+G1 X132.0 Y142.65 E0.03777086 F1800
+G0 X132.0 Y142.65 F6000 ; non-extruding move within this label
+G1 X132.0 Y140.65 E0.03147571 F1800
+G0 X129.6 Y140.65 F6000 ; non-extruding move within this label
+G1 X132.0 Y140.65 E0.03777086 F1800
+G0 X129.6 Y140.65 F6000 ; non-extruding move within this label
+G1 X129.6 Y138.65 E0.03147571 F1800
+G0 X129.6 Y138.65 F6000 ; non-extruding move within this label
+G1 X132.0 Y138.65 E0.03777086 F1800
+G0 X132.7 Y142.65 F6000 ; non-extruding move within this label
+G1 X135.1 Y142.65 E0.03777086 F1800
+G0 X132.7 Y142.65 F6000 ; non-extruding move within this label
+G1 X132.7 Y140.65 E0.03147571 F1800
+G0 X132.7 Y140.65 F6000 ; non-extruding move within this label
+G1 X135.1 Y140.65 E0.03777086 F1800
+G0 X135.1 Y140.65 F6000 ; non-extruding move within this label
+G1 X135.1 Y138.65 E0.03147571 F1800
+G0 X132.7 Y138.65 F6000 ; non-extruding move within this label
+G1 X135.1 Y138.65 E0.03777086 F1800
+; height label 0.3 mm
+; Continuous marker strokes for 0.3; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X141.35 Y142.65 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X143.75 Y142.65 E0.03777086 F1800
+G0 X143.75 Y142.65 F6000 ; non-extruding move within this label
+G1 X143.75 Y140.65 E0.03147571 F1800
+G0 X143.75 Y140.65 F6000 ; non-extruding move within this label
+G1 X143.75 Y138.65 E0.03147571 F1800
+G0 X141.35 Y138.65 F6000 ; non-extruding move within this label
+G1 X143.75 Y138.65 E0.03777086 F1800
+G0 X141.35 Y140.65 F6000 ; non-extruding move within this label
+G1 X141.35 Y138.65 E0.03147571 F1800
+G0 X141.35 Y142.65 F6000 ; non-extruding move within this label
+G1 X141.35 Y140.65 E0.03147571 F1800
+G0 X144.45 Y138.85 F6000 ; non-extruding move within this label
+G1 X144.93 Y138.85 E0.00755417 F1800
+G0 X145.15 Y142.65 F6000 ; non-extruding move within this label
+G1 X147.55 Y142.65 E0.03777086 F1800
+G0 X147.55 Y142.65 F6000 ; non-extruding move within this label
+G1 X147.55 Y140.65 E0.03147571 F1800
+G0 X145.15 Y140.65 F6000 ; non-extruding move within this label
+G1 X147.55 Y140.65 E0.03777086 F1800
+G0 X147.55 Y140.65 F6000 ; non-extruding move within this label
+G1 X147.55 Y138.65 E0.03147571 F1800
+G0 X145.15 Y138.65 F6000 ; non-extruding move within this label
+G1 X147.55 Y138.65 E0.03777086 F1800
+; height label 0.35 mm
+; Continuous marker strokes for 0.35; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X153.8 Y142.65 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X156.2 Y142.65 E0.03777086 F1800
+G0 X156.2 Y142.65 F6000 ; non-extruding move within this label
+G1 X156.2 Y140.65 E0.03147571 F1800
+G0 X156.2 Y140.65 F6000 ; non-extruding move within this label
+G1 X156.2 Y138.65 E0.03147571 F1800
+G0 X153.8 Y138.65 F6000 ; non-extruding move within this label
+G1 X156.2 Y138.65 E0.03777086 F1800
+G0 X153.8 Y140.65 F6000 ; non-extruding move within this label
+G1 X153.8 Y138.65 E0.03147571 F1800
+G0 X153.8 Y142.65 F6000 ; non-extruding move within this label
+G1 X153.8 Y140.65 E0.03147571 F1800
+G0 X156.9 Y138.85 F6000 ; non-extruding move within this label
+G1 X157.38 Y138.85 E0.00755417 F1800
+G0 X157.6 Y142.65 F6000 ; non-extruding move within this label
+G1 X160.0 Y142.65 E0.03777086 F1800
+G0 X160.0 Y142.65 F6000 ; non-extruding move within this label
+G1 X160.0 Y140.65 E0.03147571 F1800
+G0 X157.6 Y140.65 F6000 ; non-extruding move within this label
+G1 X160.0 Y140.65 E0.03777086 F1800
+G0 X160.0 Y140.65 F6000 ; non-extruding move within this label
+G1 X160.0 Y138.65 E0.03147571 F1800
+G0 X157.6 Y138.65 F6000 ; non-extruding move within this label
+G1 X160.0 Y138.65 E0.03777086 F1800
+G0 X160.7 Y142.65 F6000 ; non-extruding move within this label
+G1 X163.1 Y142.65 E0.03777086 F1800
+G0 X160.7 Y142.65 F6000 ; non-extruding move within this label
+G1 X160.7 Y140.65 E0.03147571 F1800
+G0 X160.7 Y140.65 F6000 ; non-extruding move within this label
+G1 X163.1 Y140.65 E0.03777086 F1800
+G0 X163.1 Y140.65 F6000 ; non-extruding move within this label
+G1 X163.1 Y138.65 E0.03147571 F1800
+G0 X160.7 Y138.65 F6000 ; non-extruding move within this label
+G1 X163.1 Y138.65 E0.03777086 F1800
+; flow label 90%
+; Continuous marker strokes for 90; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X73.95 Y138.15 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X76.35 Y138.15 E0.03777086 F1800
+G0 X76.35 Y138.15 F6000 ; non-extruding move within this label
+G1 X76.35 Y136.15 E0.03147571 F1800
+G0 X76.35 Y136.15 F6000 ; non-extruding move within this label
+G1 X76.35 Y134.15 E0.03147571 F1800
+G0 X73.95 Y134.15 F6000 ; non-extruding move within this label
+G1 X76.35 Y134.15 E0.03777086 F1800
+G0 X73.95 Y138.15 F6000 ; non-extruding move within this label
+G1 X73.95 Y136.15 E0.03147571 F1800
+G0 X73.95 Y136.15 F6000 ; non-extruding move within this label
+G1 X76.35 Y136.15 E0.03777086 F1800
+G0 X77.05 Y138.15 F6000 ; non-extruding move within this label
+G1 X79.45 Y138.15 E0.03777086 F1800
+G0 X79.45 Y138.15 F6000 ; non-extruding move within this label
+G1 X79.45 Y136.15 E0.03147571 F1800
+G0 X79.45 Y136.15 F6000 ; non-extruding move within this label
+G1 X79.45 Y134.15 E0.03147571 F1800
+G0 X77.05 Y134.15 F6000 ; non-extruding move within this label
+G1 X79.45 Y134.15 E0.03777086 F1800
+G0 X77.05 Y136.15 F6000 ; non-extruding move within this label
+G1 X77.05 Y134.15 E0.03147571 F1800
+G0 X77.05 Y138.15 F6000 ; non-extruding move within this label
+G1 X77.05 Y136.15 E0.03147571 F1800
+; flow label 95%
+; Continuous marker strokes for 95; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X73.95 Y131.75 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X76.35 Y131.75 E0.03777086 F1800
+G0 X76.35 Y131.75 F6000 ; non-extruding move within this label
+G1 X76.35 Y129.75 E0.03147571 F1800
+G0 X76.35 Y129.75 F6000 ; non-extruding move within this label
+G1 X76.35 Y127.75 E0.03147571 F1800
+G0 X73.95 Y127.75 F6000 ; non-extruding move within this label
+G1 X76.35 Y127.75 E0.03777086 F1800
+G0 X73.95 Y131.75 F6000 ; non-extruding move within this label
+G1 X73.95 Y129.75 E0.03147571 F1800
+G0 X73.95 Y129.75 F6000 ; non-extruding move within this label
+G1 X76.35 Y129.75 E0.03777086 F1800
+G0 X77.05 Y131.75 F6000 ; non-extruding move within this label
+G1 X79.45 Y131.75 E0.03777086 F1800
+G0 X77.05 Y131.75 F6000 ; non-extruding move within this label
+G1 X77.05 Y129.75 E0.03147571 F1800
+G0 X77.05 Y129.75 F6000 ; non-extruding move within this label
+G1 X79.45 Y129.75 E0.03777086 F1800
+G0 X79.45 Y129.75 F6000 ; non-extruding move within this label
+G1 X79.45 Y127.75 E0.03147571 F1800
+G0 X77.05 Y127.75 F6000 ; non-extruding move within this label
+G1 X79.45 Y127.75 E0.03777086 F1800
+; flow label 100%
+; Continuous marker strokes for 100; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X73.25 Y125.35 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X73.25 Y123.35 E0.03147571 F1800
+G0 X73.25 Y123.35 F6000 ; non-extruding move within this label
+G1 X73.25 Y121.35 E0.03147571 F1800
+G0 X73.95 Y125.35 F6000 ; non-extruding move within this label
+G1 X76.35 Y125.35 E0.03777086 F1800
+G0 X76.35 Y125.35 F6000 ; non-extruding move within this label
+G1 X76.35 Y123.35 E0.03147571 F1800
+G0 X76.35 Y123.35 F6000 ; non-extruding move within this label
+G1 X76.35 Y121.35 E0.03147571 F1800
+G0 X73.95 Y121.35 F6000 ; non-extruding move within this label
+G1 X76.35 Y121.35 E0.03777086 F1800
+G0 X73.95 Y123.35 F6000 ; non-extruding move within this label
+G1 X73.95 Y121.35 E0.03147571 F1800
+G0 X73.95 Y125.35 F6000 ; non-extruding move within this label
+G1 X73.95 Y123.35 E0.03147571 F1800
+G0 X77.05 Y125.35 F6000 ; non-extruding move within this label
+G1 X79.45 Y125.35 E0.03777086 F1800
+G0 X79.45 Y125.35 F6000 ; non-extruding move within this label
+G1 X79.45 Y123.35 E0.03147571 F1800
+G0 X79.45 Y123.35 F6000 ; non-extruding move within this label
+G1 X79.45 Y121.35 E0.03147571 F1800
+G0 X77.05 Y121.35 F6000 ; non-extruding move within this label
+G1 X79.45 Y121.35 E0.03777086 F1800
+G0 X77.05 Y123.35 F6000 ; non-extruding move within this label
+G1 X77.05 Y121.35 E0.03147571 F1800
+G0 X77.05 Y125.35 F6000 ; non-extruding move within this label
+G1 X77.05 Y123.35 E0.03147571 F1800
+; flow label 105%
+; Continuous marker strokes for 105; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X73.25 Y118.95 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X73.25 Y116.95 E0.03147571 F1800
+G0 X73.25 Y116.95 F6000 ; non-extruding move within this label
+G1 X73.25 Y114.95 E0.03147571 F1800
+G0 X73.95 Y118.95 F6000 ; non-extruding move within this label
+G1 X76.35 Y118.95 E0.03777086 F1800
+G0 X76.35 Y118.95 F6000 ; non-extruding move within this label
+G1 X76.35 Y116.95 E0.03147571 F1800
+G0 X76.35 Y116.95 F6000 ; non-extruding move within this label
+G1 X76.35 Y114.95 E0.03147571 F1800
+G0 X73.95 Y114.95 F6000 ; non-extruding move within this label
+G1 X76.35 Y114.95 E0.03777086 F1800
+G0 X73.95 Y116.95 F6000 ; non-extruding move within this label
+G1 X73.95 Y114.95 E0.03147571 F1800
+G0 X73.95 Y118.95 F6000 ; non-extruding move within this label
+G1 X73.95 Y116.95 E0.03147571 F1800
+G0 X77.05 Y118.95 F6000 ; non-extruding move within this label
+G1 X79.45 Y118.95 E0.03777086 F1800
+G0 X77.05 Y118.95 F6000 ; non-extruding move within this label
+G1 X77.05 Y116.95 E0.03147571 F1800
+G0 X77.05 Y116.95 F6000 ; non-extruding move within this label
+G1 X79.45 Y116.95 E0.03777086 F1800
+G0 X79.45 Y116.95 F6000 ; non-extruding move within this label
+G1 X79.45 Y114.95 E0.03147571 F1800
+G0 X77.05 Y114.95 F6000 ; non-extruding move within this label
+G1 X79.45 Y114.95 E0.03777086 F1800
+; flow label 110%
+; Continuous marker strokes for 110; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X73.25 Y112.55 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X73.25 Y110.55 E0.03147571 F1800
+G0 X73.25 Y110.55 F6000 ; non-extruding move within this label
+G1 X73.25 Y108.55 E0.03147571 F1800
+G0 X76.35 Y112.55 F6000 ; non-extruding move within this label
+G1 X76.35 Y110.55 E0.03147571 F1800
+G0 X76.35 Y110.55 F6000 ; non-extruding move within this label
+G1 X76.35 Y108.55 E0.03147571 F1800
+G0 X77.05 Y112.55 F6000 ; non-extruding move within this label
+G1 X79.45 Y112.55 E0.03777086 F1800
+G0 X79.45 Y112.55 F6000 ; non-extruding move within this label
+G1 X79.45 Y110.55 E0.03147571 F1800
+G0 X79.45 Y110.55 F6000 ; non-extruding move within this label
+G1 X79.45 Y108.55 E0.03147571 F1800
+G0 X77.05 Y108.55 F6000 ; non-extruding move within this label
+G1 X79.45 Y108.55 E0.03777086 F1800
+G0 X77.05 Y110.55 F6000 ; non-extruding move within this label
+G1 X77.05 Y108.55 E0.03147571 F1800
+G0 X77.05 Y112.55 F6000 ; non-extruding move within this label
+G1 X77.05 Y110.55 E0.03147571 F1800
+; flow label 115%
+; Continuous marker strokes for 115; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X73.25 Y106.15 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X73.25 Y104.15 E0.03147571 F1800
+G0 X73.25 Y104.15 F6000 ; non-extruding move within this label
+G1 X73.25 Y102.15 E0.03147571 F1800
+G0 X76.35 Y106.15 F6000 ; non-extruding move within this label
+G1 X76.35 Y104.15 E0.03147571 F1800
+G0 X76.35 Y104.15 F6000 ; non-extruding move within this label
+G1 X76.35 Y102.15 E0.03147571 F1800
+G0 X77.05 Y106.15 F6000 ; non-extruding move within this label
+G1 X79.45 Y106.15 E0.03777086 F1800
+G0 X77.05 Y106.15 F6000 ; non-extruding move within this label
+G1 X77.05 Y104.15 E0.03147571 F1800
+G0 X77.05 Y104.15 F6000 ; non-extruding move within this label
+G1 X79.45 Y104.15 E0.03777086 F1800
+G0 X79.45 Y104.15 F6000 ; non-extruding move within this label
+G1 X79.45 Y102.15 E0.03147571 F1800
+G0 X77.05 Y102.15 F6000 ; non-extruding move within this label
+G1 X79.45 Y102.15 E0.03777086 F1800
+; flow label 120%
+; Continuous marker strokes for 120; travel within this label has no retract or Z-hop.
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X73.25 Y99.75 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X73.25 Y97.75 E0.03147571 F1800
+G0 X73.25 Y97.75 F6000 ; non-extruding move within this label
+G1 X73.25 Y95.75 E0.03147571 F1800
+G0 X73.95 Y99.75 F6000 ; non-extruding move within this label
+G1 X76.35 Y99.75 E0.03777086 F1800
+G0 X76.35 Y99.75 F6000 ; non-extruding move within this label
+G1 X76.35 Y97.75 E0.03147571 F1800
+G0 X73.95 Y97.75 F6000 ; non-extruding move within this label
+G1 X76.35 Y97.75 E0.03777086 F1800
+G0 X73.95 Y97.75 F6000 ; non-extruding move within this label
+G1 X73.95 Y95.75 E0.03147571 F1800
+G0 X73.95 Y95.75 F6000 ; non-extruding move within this label
+G1 X76.35 Y95.75 E0.03777086 F1800
+G0 X77.05 Y99.75 F6000 ; non-extruding move within this label
+G1 X79.45 Y99.75 E0.03777086 F1800
+G0 X79.45 Y99.75 F6000 ; non-extruding move within this label
+G1 X79.45 Y97.75 E0.03147571 F1800
+G0 X79.45 Y97.75 F6000 ; non-extruding move within this label
+G1 X79.45 Y95.75 E0.03147571 F1800
+G0 X77.05 Y95.75 F6000 ; non-extruding move within this label
+G1 X79.45 Y95.75 E0.03777086 F1800
+G0 X77.05 Y97.75 F6000 ; non-extruding move within this label
+G1 X77.05 Y95.75 E0.03147571 F1800
+G0 X77.05 Y99.75 F6000 ; non-extruding move within this label
+G1 X77.05 Y97.75 E0.03147571 F1800
+
+; TEST MATRIX | each blue line in the printed reference represents one cell specimen
+; CELL | nozzle 0 deg | layer 0.1 mm | flow 90% | 1 wall(s) at 0.37854 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y136.15 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y136.15 E0.16996885 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y136.15 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y136.15 E0.16996885 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y136.15 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y136.15 E0.16996885 F3600
+; CELL | nozzle 0 deg | layer 0.1 mm | flow 95% | 1 wall(s) at 0.37854 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y129.75 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y129.75 E0.17941157 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y129.75 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y129.75 E0.17941157 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y129.75 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y129.75 E0.17941157 F3600
+; CELL | nozzle 0 deg | layer 0.1 mm | flow 100% | 1 wall(s) at 0.37854 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y123.35 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y123.35 E0.18885428 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y123.35 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y123.35 E0.18885428 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y123.35 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y123.35 E0.18885428 F3600
+; CELL | nozzle 0 deg | layer 0.1 mm | flow 105% | 1 wall(s) at 0.37854 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y116.95 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y116.95 E0.198297 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y116.95 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y116.95 E0.198297 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y116.95 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y116.95 E0.198297 F3600
+; CELL | nozzle 0 deg | layer 0.1 mm | flow 110% | 1 wall(s) at 0.37854 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y110.55 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y110.55 E0.20773971 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y110.55 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y110.55 E0.20773971 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y110.55 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y110.55 E0.20773971 F3600
+; CELL | nozzle 0 deg | layer 0.1 mm | flow 115% | 1 wall(s) at 0.37854 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y104.15 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y104.15 E0.21718242 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y104.15 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y104.15 E0.21718242 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y104.15 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y104.15 E0.21718242 F3600
+; CELL | nozzle 0 deg | layer 0.1 mm | flow 120% | 1 wall(s) at 0.37854 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y97.75 F6000
+G0 Z0.34
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y97.75 E0.22662514 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y97.75 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y97.75 E0.22662514 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X82.45 Y97.75 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X94.45 Y97.75 E0.22662514 F3600
+; CELL | nozzle 0 deg | layer 0.15 mm | flow 90% | 1 wall(s) at 0.36781 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y136.15 F6000
+G0 Z0.39
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y136.15 E0.24772637 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y136.15 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y136.15 E0.24772637 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y136.15 F6000
+G0 Z0.69
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y136.15 E0.24772637 F3600
+; CELL | nozzle 0 deg | layer 0.15 mm | flow 95% | 1 wall(s) at 0.36781 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y129.75 F6000
+G0 Z0.39
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y129.75 E0.26148895 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y129.75 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y129.75 E0.26148895 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y129.75 F6000
+G0 Z0.69
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y129.75 E0.26148895 F3600
+; CELL | nozzle 0 deg | layer 0.15 mm | flow 100% | 1 wall(s) at 0.36781 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y123.35 F6000
+G0 Z0.39
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y123.35 E0.27525152 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y123.35 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y123.35 E0.27525152 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y123.35 F6000
+G0 Z0.69
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y123.35 E0.27525152 F3600
+; CELL | nozzle 0 deg | layer 0.15 mm | flow 105% | 1 wall(s) at 0.36781 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y116.95 F6000
+G0 Z0.39
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y116.95 E0.2890141 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y116.95 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y116.95 E0.2890141 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y116.95 F6000
+G0 Z0.69
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y116.95 E0.2890141 F3600
+; CELL | nozzle 0 deg | layer 0.15 mm | flow 110% | 1 wall(s) at 0.36781 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y110.55 F6000
+G0 Z0.39
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y110.55 E0.30277668 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y110.55 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y110.55 E0.30277668 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y110.55 F6000
+G0 Z0.69
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y110.55 E0.30277668 F3600
+; CELL | nozzle 0 deg | layer 0.15 mm | flow 115% | 1 wall(s) at 0.36781 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y104.15 F6000
+G0 Z0.39
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y104.15 E0.31653925 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y104.15 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y104.15 E0.31653925 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y104.15 F6000
+G0 Z0.69
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y104.15 E0.31653925 F3600
+; CELL | nozzle 0 deg | layer 0.15 mm | flow 120% | 1 wall(s) at 0.36781 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y97.75 F6000
+G0 Z0.39
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y97.75 E0.33030183 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y97.75 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y97.75 E0.33030183 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X96.45 Y97.75 F6000
+G0 Z0.69
+G1 E0.5 F1800 ; unretract
+G1 X108.45 Y97.75 E0.33030183 F3600
+; CELL | nozzle 0 deg | layer 0.2 mm | flow 90% | 1 wall(s) at 0.35708 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y136.15 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y136.15 E0.32066595 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y136.15 F6000
+G0 Z0.64
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y136.15 E0.32066595 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y136.15 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y136.15 E0.32066595 F3600
+; CELL | nozzle 0 deg | layer 0.2 mm | flow 95% | 1 wall(s) at 0.35708 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y129.75 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y129.75 E0.33848073 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y129.75 F6000
+G0 Z0.64
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y129.75 E0.33848073 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y129.75 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y129.75 E0.33848073 F3600
+; CELL | nozzle 0 deg | layer 0.2 mm | flow 100% | 1 wall(s) at 0.35708 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y123.35 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y123.35 E0.3562955 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y123.35 F6000
+G0 Z0.64
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y123.35 E0.3562955 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y123.35 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y123.35 E0.3562955 F3600
+; CELL | nozzle 0 deg | layer 0.2 mm | flow 105% | 1 wall(s) at 0.35708 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y116.95 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y116.95 E0.37411028 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y116.95 F6000
+G0 Z0.64
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y116.95 E0.37411028 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y116.95 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y116.95 E0.37411028 F3600
+; CELL | nozzle 0 deg | layer 0.2 mm | flow 110% | 1 wall(s) at 0.35708 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y110.55 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y110.55 E0.39192505 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y110.55 F6000
+G0 Z0.64
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y110.55 E0.39192505 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y110.55 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y110.55 E0.39192505 F3600
+; CELL | nozzle 0 deg | layer 0.2 mm | flow 115% | 1 wall(s) at 0.35708 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y104.15 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y104.15 E0.40973983 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y104.15 F6000
+G0 Z0.64
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y104.15 E0.40973983 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y104.15 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y104.15 E0.40973983 F3600
+; CELL | nozzle 0 deg | layer 0.2 mm | flow 120% | 1 wall(s) at 0.35708 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y97.75 F6000
+G0 Z0.44
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y97.75 E0.4275546 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y97.75 F6000
+G0 Z0.64
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y97.75 E0.4275546 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X110.45 Y97.75 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X122.45 Y97.75 E0.4275546 F3600
+; CELL | nozzle 0 deg | layer 0.25 mm | flow 90% | 1 wall(s) at 0.34635 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y136.15 F6000
+G0 Z0.49
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y136.15 E0.3887876 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y136.15 F6000
+G0 Z0.74
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y136.15 E0.3887876 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y136.15 F6000
+G0 Z0.99
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y136.15 E0.3887876 F3600
+; CELL | nozzle 0 deg | layer 0.25 mm | flow 95% | 1 wall(s) at 0.34635 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y129.75 F6000
+G0 Z0.49
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y129.75 E0.41038691 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y129.75 F6000
+G0 Z0.74
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y129.75 E0.41038691 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y129.75 F6000
+G0 Z0.99
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y129.75 E0.41038691 F3600
+; CELL | nozzle 0 deg | layer 0.25 mm | flow 100% | 1 wall(s) at 0.34635 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y123.35 F6000
+G0 Z0.49
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y123.35 E0.43198622 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y123.35 F6000
+G0 Z0.74
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y123.35 E0.43198622 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y123.35 F6000
+G0 Z0.99
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y123.35 E0.43198622 F3600
+; CELL | nozzle 0 deg | layer 0.25 mm | flow 105% | 1 wall(s) at 0.34635 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y116.95 F6000
+G0 Z0.49
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y116.95 E0.45358553 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y116.95 F6000
+G0 Z0.74
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y116.95 E0.45358553 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y116.95 F6000
+G0 Z0.99
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y116.95 E0.45358553 F3600
+; CELL | nozzle 0 deg | layer 0.25 mm | flow 110% | 1 wall(s) at 0.34635 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y110.55 F6000
+G0 Z0.49
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y110.55 E0.47518484 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y110.55 F6000
+G0 Z0.74
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y110.55 E0.47518484 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y110.55 F6000
+G0 Z0.99
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y110.55 E0.47518484 F3600
+; CELL | nozzle 0 deg | layer 0.25 mm | flow 115% | 1 wall(s) at 0.34635 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y104.15 F6000
+G0 Z0.49
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y104.15 E0.49678415 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y104.15 F6000
+G0 Z0.74
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y104.15 E0.49678415 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y104.15 F6000
+G0 Z0.99
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y104.15 E0.49678415 F3600
+; CELL | nozzle 0 deg | layer 0.25 mm | flow 120% | 1 wall(s) at 0.34635 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y97.75 F6000
+G0 Z0.49
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y97.75 E0.51838346 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y97.75 F6000
+G0 Z0.74
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y97.75 E0.51838346 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X124.45 Y97.75 F6000
+G0 Z0.99
+G1 E0.5 F1800 ; unretract
+G1 X136.45 Y97.75 E0.51838346 F3600
+; CELL | nozzle 0 deg | layer 0.3 mm | flow 90% | 1 wall(s) at 0.335619 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y136.15 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y136.15 E0.4520913 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y136.15 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y136.15 E0.4520913 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y136.15 F6000
+G0 Z1.14
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y136.15 E0.4520913 F3600
+; CELL | nozzle 0 deg | layer 0.3 mm | flow 95% | 1 wall(s) at 0.335619 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y129.75 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y129.75 E0.47720749 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y129.75 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y129.75 E0.47720749 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y129.75 F6000
+G0 Z1.14
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y129.75 E0.47720749 F3600
+; CELL | nozzle 0 deg | layer 0.3 mm | flow 100% | 1 wall(s) at 0.335619 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y123.35 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y123.35 E0.50232367 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y123.35 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y123.35 E0.50232367 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y123.35 F6000
+G0 Z1.14
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y123.35 E0.50232367 F3600
+; CELL | nozzle 0 deg | layer 0.3 mm | flow 105% | 1 wall(s) at 0.335619 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y116.95 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y116.95 E0.52743985 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y116.95 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y116.95 E0.52743985 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y116.95 F6000
+G0 Z1.14
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y116.95 E0.52743985 F3600
+; CELL | nozzle 0 deg | layer 0.3 mm | flow 110% | 1 wall(s) at 0.335619 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y110.55 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y110.55 E0.55255604 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y110.55 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y110.55 E0.55255604 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y110.55 F6000
+G0 Z1.14
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y110.55 E0.55255604 F3600
+; CELL | nozzle 0 deg | layer 0.3 mm | flow 115% | 1 wall(s) at 0.335619 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y104.15 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y104.15 E0.57767222 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y104.15 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y104.15 E0.57767222 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y104.15 F6000
+G0 Z1.14
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y104.15 E0.57767222 F3600
+; CELL | nozzle 0 deg | layer 0.3 mm | flow 120% | 1 wall(s) at 0.335619 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y97.75 F6000
+G0 Z0.54
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y97.75 E0.6027884 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y97.75 F6000
+G0 Z0.84
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y97.75 E0.6027884 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X138.45 Y97.75 F6000
+G0 Z1.14
+G1 E0.5 F1800 ; unretract
+G1 X150.45 Y97.75 E0.6027884 F3600
+; CELL | nozzle 0 deg | layer 0.35 mm | flow 90% | 1 wall(s) at 0.324889 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y136.15 F6000
+G0 Z0.59
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y136.15 E0.51057707 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y136.15 F6000
+G0 Z0.94
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y136.15 E0.51057707 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y136.15 F6000
+G0 Z1.29
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y136.15 E0.51057707 F3600
+; CELL | nozzle 0 deg | layer 0.35 mm | flow 95% | 1 wall(s) at 0.324889 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y129.75 F6000
+G0 Z0.59
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y129.75 E0.53894246 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y129.75 F6000
+G0 Z0.94
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y129.75 E0.53894246 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y129.75 F6000
+G0 Z1.29
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y129.75 E0.53894246 F3600
+; CELL | nozzle 0 deg | layer 0.35 mm | flow 100% | 1 wall(s) at 0.324889 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y123.35 F6000
+G0 Z0.59
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y123.35 E0.56730785 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y123.35 F6000
+G0 Z0.94
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y123.35 E0.56730785 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y123.35 F6000
+G0 Z1.29
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y123.35 E0.56730785 F3600
+; CELL | nozzle 0 deg | layer 0.35 mm | flow 105% | 1 wall(s) at 0.324889 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y116.95 F6000
+G0 Z0.59
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y116.95 E0.59567325 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y116.95 F6000
+G0 Z0.94
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y116.95 E0.59567325 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y116.95 F6000
+G0 Z1.29
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y116.95 E0.59567325 F3600
+; CELL | nozzle 0 deg | layer 0.35 mm | flow 110% | 1 wall(s) at 0.324889 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y110.55 F6000
+G0 Z0.59
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y110.55 E0.62403864 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y110.55 F6000
+G0 Z0.94
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y110.55 E0.62403864 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y110.55 F6000
+G0 Z1.29
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y110.55 E0.62403864 F3600
+; CELL | nozzle 0 deg | layer 0.35 mm | flow 115% | 1 wall(s) at 0.324889 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y104.15 F6000
+G0 Z0.59
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y104.15 E0.65240403 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y104.15 F6000
+G0 Z0.94
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y104.15 E0.65240403 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y104.15 F6000
+G0 Z1.29
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y104.15 E0.65240403 F3600
+; CELL | nozzle 0 deg | layer 0.35 mm | flow 120% | 1 wall(s) at 0.324889 mm center spacing
+M106 S128 ; fan 50%
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y97.75 F6000
+G0 Z0.59
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y97.75 E0.68076943 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y97.75 F6000
+G0 Z0.94
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y97.75 E0.68076943 F3600
+G1 E-0.5 F2100 ; retract
+G0 Z2.39 F6000 ; lift / Z-hop
+G0 X152.45 Y97.75 F6000
+G0 Z1.29
+G1 E0.5 F1800 ; unretract
+G1 X164.45 Y97.75 E0.68076943 F3600
+; Default shutdown: turn off hotend and bed
+M104 S0 ; turn off hotend
+M140 S0 ; turn off bed
+
+; End of nozzle angle calibration test matrix.
