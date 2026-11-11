@@ -14,7 +14,10 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32
 from trajectory_msgs.msg import JointTrajectoryPoint
 
+from extrusion_control.extrusion_calibration import MAX_STEPPER_SPEED
 from print_control.motion_planner import JOINT_NAMES, duration_parts
+
+EXTRUSION_SETTLE_STEPS = 0.5
 
 
 class MotionExecutor(Node):
@@ -95,20 +98,44 @@ class MotionExecutor(Node):
             self.speed = speed
 
     def stream_extrusion(self, extrusion, elapsed):
-        """Command the mean speed that reaches the planned position one period ahead.
+        """
+        Stream planned feed with gradual correction of host-clock material error.
 
-        commanded_steps integrates the published speed on this clock, so loop jitter
-        shifts when filament is fed but never how much, as in Klipper's step generation.
+        Correcting all error in one period oscillates when callbacks arrive two periods
+        apart. Spread correction over at least four periods and twice the last interval.
+        This estimates delivered steps from published commands; transport delay is unmeasured.
         """
         period = self.config.extrusion_update_period_s
+        held = 0.0
         if self.last_extrusion_update is not None:
             held = elapsed - self.last_extrusion_update
             if held < period:
                 return
             self.commanded_steps += self.speed * held
-        target = extrusion.steps_at(elapsed + period)
-        self.set_extrusion((target - self.commanded_steps) / period)
+        position = extrusion.steps_at(elapsed)
+        feed = (extrusion.steps_at(elapsed + period) - position) / period
+        recovery = max(4 * period, 2 * held)
+        error = position - self.commanded_steps
+        speed = feed + error / recovery
+        if elapsed >= extrusion.duration_s and abs(error) <= EXTRUSION_SETTLE_STEPS:
+            speed = 0.0
+        if not np.isfinite(speed) or abs(speed) > MAX_STEPPER_SPEED:
+            self.set_extrusion(0.0, force=True)
+            raise RuntimeError('Extrusion correction exceeds the firmware speed limit')
+        self.set_extrusion(speed)
         self.last_extrusion_update = elapsed
+
+    def extrusion_remaining(self, extrusion, elapsed):
+        """Estimate remaining STEP pulses, including the currently held speed."""
+        delivered = self.commanded_steps
+        if self.last_extrusion_update is not None:
+            delivered += self.speed * (elapsed - self.last_extrusion_update)
+        return extrusion.steps_at(extrusion.duration_s) - delivered
+
+    def extrusion_poll_timeout(self, started):
+        """Wake for the next command deadline even after an intervening ROS callback."""
+        due = started + self.last_extrusion_update + self.config.extrusion_update_period_s
+        return min(0.01, max(0.0, due - time.monotonic()))
 
     def trajectory_goal(self, motion):
         """Encode joint samples and final tolerances as an action goal."""
@@ -132,7 +159,7 @@ class MotionExecutor(Node):
         return goal
 
     def motion_feedback(self, token):
-        """Controller feedback is only a liveness signal; ignore a finished trajectory's."""
+        """Use only the active trajectory's controller feedback as a liveness signal."""
         if token is self.motion_token:
             self.feedback_received = time.monotonic()
 
@@ -181,11 +208,13 @@ class MotionExecutor(Node):
                 raise RuntimeError('Controller feedback timed out')
             if now > deadline:
                 raise RuntimeError(f'{motion.name}: execution timed out')
+            timeout = 0.01
             if extrusion is not None:
                 if self.speed_publisher.get_subscription_count() == 0:
                     raise RuntimeError('Extruder subscriber disconnected')
                 self.stream_extrusion(extrusion, now - started)
-            rclpy.spin_once(self, timeout_sec=0.01)
+                timeout = self.extrusion_poll_timeout(started)
+            rclpy.spin_once(self, timeout_sec=timeout)
         self.motion_token = None
         response = self.result_future.result()
         if (response.status != GoalStatus.STATUS_SUCCEEDED or
@@ -196,12 +225,27 @@ class MotionExecutor(Node):
                 f'error={response.result.error_code}: {response.result.error_string}'
             )
         if extrusion is not None:
-            # Success may arrive a few ms before this clock reaches the end of the profile.
-            end = started + extrusion.duration_s + self.config.extrusion_update_period_s
-            while time.monotonic() < end:
+            # Finish only small host-clock residuals after success, with a bounded tail.
+            # A failed/cancelled action above never gets this extra material.
+            period = self.config.extrusion_update_period_s
+            end = started + extrusion.duration_s + max(0.5, 40 * period)
+            while True:
                 self.check_interrupted()
-                self.stream_extrusion(extrusion, time.monotonic() - started)
-                rclpy.spin_once(self, timeout_sec=0.005)
+                now = time.monotonic()
+                elapsed = now - started
+                remaining = self.extrusion_remaining(extrusion, elapsed)
+                if (elapsed >= extrusion.duration_s and
+                        abs(remaining) <= EXTRUSION_SETTLE_STEPS):
+                    break
+                if now >= end:
+                    self.set_extrusion(0.0, force=True)
+                    raise RuntimeError('Extrusion did not settle within the completion timeout')
+                if not self.joints_fresh():
+                    raise RuntimeError('Joint feedback became stale during extrusion completion')
+                if self.speed_publisher.get_subscription_count() == 0:
+                    raise RuntimeError('Extruder disconnected during extrusion completion')
+                self.stream_extrusion(extrusion, elapsed)
+                rclpy.spin_once(self, timeout_sec=self.extrusion_poll_timeout(started))
         self.set_extrusion(0.0, force=True)
         # Require a new joint sample before checking the end of this phase.
         previous_sample = self.joint_received

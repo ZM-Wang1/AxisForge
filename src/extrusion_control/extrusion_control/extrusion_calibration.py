@@ -4,7 +4,7 @@ import math
 
 
 # Theoretical motor STEP pulses per filament mm (replaces the speed-dependent table).
-STEPS_PER_MM = 185.2
+STEPS_PER_MM = 1075.73
 MAX_STEPPER_SPEED = 64000.0
 # Firmware-counted moves use TIM1's 16-bit repetition counter.
 MAX_MOVE_STEPS = 65536

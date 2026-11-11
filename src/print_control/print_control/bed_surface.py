@@ -34,25 +34,50 @@ class BedSurface:
         self.z = z
         self.stamp = stamp
         self.source = source
+        self.orientation_note = ''
 
     @classmethod
     def load(cls, path, tcp_offset_mm, nozzle_rpy_deg, extrapolation_mm):
-        """Read a bed_probe file; refuse one measured with a different nozzle model."""
+        """Reuse upright Base-frame measurements with the same calibrated nozzle TCP."""
         path = Path(path).expanduser().resolve()
         if not path.is_file():
             raise ValueError(f'bed_probe_file not found: {path} '
                              '(run bed_probe from the AxisForge root, or set it to "")')
         data = yaml.safe_load(path.read_text())
+        orientation_note = ''
         for name, current in (('tcp_offset_mm', tcp_offset_mm),
                               ('nozzle_rpy_deg', nozzle_rpy_deg)):
-            probed = data.get(name)
-            if probed is None or not np.allclose(probed, current, atol=1e-3):
+            probed = np.asarray(data.get(name), dtype=float)
+            if probed.shape != (3,) or not np.all(np.isfinite(probed)):
+                raise ValueError(f'{path.name}: {name} must contain three finite numbers; '
+                                 'probe the bed again')
+            if np.allclose(probed, current, rtol=0, atol=1e-3):
+                continue
+            if name == 'nozzle_rpy_deg':
+                roll, pitch, _ = np.deg2rad(probed)
+                upright = math.isclose(math.cos(roll) * math.cos(pitch), -1.0,
+                                       rel_tol=0, abs_tol=1e-10)
+                calibrated_tip = not np.allclose(tcp_offset_mm, 0.0, rtol=0, atol=1e-3)
+                # Upright touch points locate the bed in Base, independent of the later
+                # print orientation. tool_pose() rotates the same TCP offset for printing.
+                # A tilted touch can locate the nozzle rim instead of its center; without
+                # a nozzle contact model it must not be reused at another orientation.
+                if upright and calibrated_tip:
+                    orientation_note = (f'upright probe RPY {probed.tolist()} reused at '
+                                        f'print RPY {list(current)} with the same nozzle TCP')
+                    continue
+            if name == 'tcp_offset_mm':
                 raise ValueError(f'{path.name} was probed with {name} {probed}, now '
                                  f'{list(current)}; probe the bed again')
+            raise ValueError(f'{path.name} was probed with {name} {probed}, now '
+                             f'{list(current)}; orientation changes require an upright '
+                             'probe and a calibrated nonzero tcp_offset_mm; probe the bed again')
         points = data.get('points') or []
         xy = [point['nozzle_base_mm'][:2] for point in points]
         z = [point['bed_z_mm'] for point in points]
-        return cls(xy, z, extrapolation_mm, str(data.get('stamp', '')), str(path))
+        surface = cls(xy, z, extrapolation_mm, str(data.get('stamp', '')), str(path))
+        surface.orientation_note = orientation_note
+        return surface
 
     def height(self, xy):
         """Bed Z under a robot Base XY; reject points beyond the probed area."""
@@ -64,8 +89,10 @@ class BedSurface:
 
     def describe(self):
         """Short provenance line for the startup log."""
-        return (f'{len(self.z)} points probed {self.stamp} ({self.source}); bed Z '
-                f'{self.z.min():.3f}..{self.z.max():.3f} mm, range {np.ptp(self.z):.3f} mm')
+        description = (f'{len(self.z)} points probed {self.stamp} ({self.source}); bed Z '
+                       f'{self.z.min():.3f}..{self.z.max():.3f} mm, '
+                       f'range {np.ptp(self.z):.3f} mm')
+        return description + (f'; {self.orientation_note}' if self.orientation_note else '')
 
 
 def subdivide(segments, max_length_mm=MAX_SEGMENT_MM):
@@ -77,7 +104,14 @@ def subdivide(segments, max_length_mm=MAX_SEGMENT_MM):
             pieces.append(segment)
             continue
         nodes = np.linspace(segment.start, segment.end, count + 1)
+        pitches = None
+        if segment.start_pitch_deg is not None and segment.nozzle_pitch_deg is not None:
+            pitches = np.linspace(segment.start_pitch_deg, segment.nozzle_pitch_deg, count + 1)
         pieces.extend(replace(segment, start=tuple(start), end=tuple(end),
-                              delta_e=segment.delta_e / count)
-                      for start, end in zip(nodes[:-1], nodes[1:]))
+                              delta_e=segment.delta_e / count,
+                              start_pitch_deg=(segment.start_pitch_deg if pitches is None
+                                               else float(pitches[index])),
+                              nozzle_pitch_deg=(segment.nozzle_pitch_deg if pitches is None
+                                                else float(pitches[index + 1])))
+                      for index, (start, end) in enumerate(zip(nodes[:-1], nodes[1:])))
     return pieces

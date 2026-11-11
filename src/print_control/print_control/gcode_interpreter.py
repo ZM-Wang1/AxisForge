@@ -110,7 +110,8 @@ class GCodeInterpreter(MotionExecutor):
     def run(self):
         """Parse and plan every step before enabling execution of the first motion."""
         cfg = self.settings
-        parser = GCodeParser(cfg.ignored_commands, cfg.max_travel_speed_mm_s)
+        parser = GCodeParser(cfg.ignored_commands, cfg.max_travel_speed_mm_s,
+                             cfg.pressure_advance_s)
         with Path(cfg.file).expanduser().open() as source:
             segments = parser.parse(source)
         for command, lines in sorted(parser.ignored.items()):

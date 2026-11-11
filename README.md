@@ -137,8 +137,9 @@ ros2 launch axisforge_bringup ur_master.launch.py \
 
 The bed is movable: probe it again every time it is placed. With the UR driver running
 (Terminal 1), jog the nozzle onto a 3x3 grid (G-code X/Y = 30, 117.5, 205) and record each
-touch. Every move keeps the printing orientation and TCP from `ur_master.yaml`; each point
-starts `clearance_mm` above `z_offset`, and jogs stop 3 mm below it.
+touch. Probing always uses an upright nozzle (roll 180°, pitch 0°), with the printing yaw
+and TCP from `ur_master.yaml`; each point starts `clearance_mm` above `z_offset`, and jogs
+stop 3 mm below it.
 
 ```bash
 cd /path/to/AxisForge   # bed_probe_file is relative to this directory
@@ -151,11 +152,6 @@ Keys: `w`/`s` Z up/down, `1`-`4` Z step 1/0.1/0.05/0.01 mm, `i`/`k` +Y/-Y and `j
 is subtracted), `n`/`p` next/previous point, `h` lift, `q` lift, save and quit. Ctrl-C
 cancels the active trajectory. The result goes to `bed_probe_file` unless `--output` is given.
 
-`gcode_interpreter` then fits a thin-plate spline through the probed heights (robot Base XY,
-exact at every point) and prints with Z = G-code Z + bed height + `bed_z_adjust_mm`; segments
-are split into <= 10 mm pieces so straight lines follow the curved bed. Points more than
-`bed_probe_extrapolation_mm` outside the probed area, or a probe file taken with another TCP or
-nozzle orientation, fail preflight. The startup log shows when the surface was probed.
 
 Configuration is in [`ur_master.yaml`](src/axisforge_bringup/config/ur_master.yaml):
 
@@ -163,7 +159,7 @@ Configuration is in [`ur_master.yaml`](src/axisforge_bringup/config/ur_master.ya
 | --- | --- |
 | `x_offset`, `y_offset`, `z_offset`, `origin_at_center`, `bed_size_mm` | Preserve the old placement convention; center mode adds half the bed dimensions to X/Y offsets |
 | `bed_probe_file`, `bed_z_adjust_mm`, `bed_probe_extrapolation_mm` | Probed bed surface (relative to the launch directory; `''` uses the flat `z_offset`), first-layer fine adjust (+ raises the nozzle), and the allowed XY distance beyond the probed points |
-| `nozzle_roll_deg`, `nozzle_pitch_deg`, `wrist_angle` | Fixed tool orientation in degrees; `wrist_angle` remains yaw |
+| `nozzle_roll_deg`, `nozzle_pitch_deg`, `wrist_angle` | Initial tool orientation in degrees; G-code A overrides pitch, and `wrist_angle` remains yaw. Bed probing always uses roll 180°, pitch 0° |
 | `tcp_offset_mm` | Nozzle-tip offset in tool0 coordinates; zero preserves old tool0 targets. With a measured TCP, the XYZ offsets must refer to the nozzle tip |
 | `waypoint_spacing_mm` | Spatial sampling interval, replacing `split_threshold` |
 | `path_tolerance_mm`, `orientation_tolerance_deg` | Model-based checks between IK samples using cubic interpolation |
@@ -178,7 +174,7 @@ Configuration is in [`ur_master.yaml`](src/axisforge_bringup/config/ur_master.ya
 | `max_corner_speed_mm_s` | Upper speed bound within a corner blend, further constrained by curvature and joint limits |
 | `max_continuous_points` | Memory/message-size guard per run; exceeding it rejects preflight rather than silently inserting stops |
 | `clearance_mm`, `approach_duration_s` | Approach above the first position and lift at completion; no automatic HOME movement |
-| `extrusion_update_period_s` | Extrusion is feed-forward, as in Klipper: preflight plans filament position E(t) from the same path timing as the robot trajectory, sampled at this period and converted at a constant 185.2 steps/mm (`extrusion_calibration.STEPS_PER_MM`). From trajectory acceptance the node sends `/stepper/speed` every period so the motor reaches the planned position one period later; actual joint positions are not used. Keep the pendant speed slider at 100 % |
+| `extrusion_update_period_s` | Preflight plans extrusion E(t) from robot trajectory timing and converts it to stepper pulses. During execution, `/stepper/speed` receives the next-period average feed rate, with gradual correction for host scheduling delays. Actual motor position and transport latency are not measured. Keep the UR speed slider at 100% |
 | `pressure_advance_s` | Klipper `pressure_advance` K for depositing motions: the planned position is E + K * dE/dt. It cancels at the rest-to-rest end, so total E is exact; the extruder briefly reverses while decelerating. 0 keeps extrusion in sync with motion |
 | `extrusion_move_margin_s` | E-only moves (retract/unretract) are sent to `/stepper/move` as `[signed steps, steps/s]` and counted by the firmware; the node waits the move duration plus this margin so transport jitter cannot truncate it |
 | `ignored_commands` | Explicit list of externally managed commands; every encountered code is reported |

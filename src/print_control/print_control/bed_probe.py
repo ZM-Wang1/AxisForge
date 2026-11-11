@@ -1,8 +1,8 @@
-"""Jog the nozzle onto a 3x3 bed grid from the keyboard and record the touch points.
+"""
+Jog the nozzle onto a 3x3 bed grid from the keyboard and record the touch points.
 
-Every move is a straight line at the printing orientation (nozzle_roll_deg,
-nozzle_pitch_deg, wrist_angle) with the printing TCP, so the recorded heights are
-in exactly the frame that gcode_interpreter later uses for compensation.
+Every move uses an upright nozzle (roll 180, pitch 0) with the printing yaw and
+TCP, so the Base-frame bed heights can also be used for tilted printing.
 """
 
 import argparse
@@ -76,7 +76,7 @@ def rounded(values, digits=4):
 
 
 class BedProbe(MotionExecutor):
-    """Keyboard jogging at the printing orientation; records nozzle touch points."""
+    """Keyboard jogging with an upright nozzle; records nozzle touch points."""
 
     def __init__(self, settings, motion_config, args):
         """Plan with the printing planner; dry runs simulate the robot."""
@@ -89,7 +89,8 @@ class BedProbe(MotionExecutor):
         # Write where gcode_interpreter reads; never plan on the surface being replaced.
         self.output = Path(args.output or settings.bed_probe_file or 'bed_probe.yaml')
         self.output = self.output.expanduser().resolve()
-        self.settings = replace(settings, bed_probe_file='')
+        self.settings = replace(settings, bed_probe_file='', nozzle_roll_deg=180.0,
+                                nozzle_pitch_deg=0.0)
         self.args = args
         planner = GCodePlanner(self.settings, motion_config)
         self.initialize_execution(planner.config, planner)

@@ -20,10 +20,14 @@ class ToolpathSegment:
     source_line: int
     layer: int | None = None
     dwell_s: float = 0.0
+    start_pitch_deg: float | None = None
+    nozzle_pitch_deg: float | None = None
 
     def __post_init__(self):
         """Reject overflow in resolved coordinates, feed or material increments."""
         values = (*self.start, *self.end, self.delta_e, self.feed_mm_s, self.dwell_s)
+        values += tuple(value for value in (self.start_pitch_deg, self.nozzle_pitch_deg)
+                        if value is not None)
         if not all(math.isfinite(value) for value in values) or not math.isfinite(self.length_mm):
             raise ValueError('Resolved segment contains nonfinite values')
 
@@ -36,7 +40,7 @@ class ToolpathSegment:
 class GCodeParser:
     """Maintain Marlin-style modal state without publishing or moving anything."""
 
-    def __init__(self, ignored_commands=(), travel_speed_mm_s=20.0):
+    def __init__(self, ignored_commands=(), travel_speed_mm_s=20.0, pressure_advance_s=None):
         """Require unsupported commands to be explicitly delegated externally."""
         self.ignored_commands = {command.upper() for command in ignored_commands}
         self.travel_speed = travel_speed_mm_s
@@ -52,6 +56,8 @@ class GCodeParser:
         self.speed_factor = 1.0
         self.flow_factor = 1.0
         self.layer = None
+        self.pitch = None  # None keeps the configured nozzle_pitch_deg until the first A.
+        self.pressure_advance_s = pressure_advance_s
 
     def parse(self, lines):
         """Return all segments; report failures with their original file line."""
@@ -74,6 +80,16 @@ class GCodeParser:
             self.layer = int(layer[1])
         text = re.sub(r'\([^()]*\)', '', raw.split(';', 1)[0]).strip().upper()
         if not text:
+            return None
+        if text.startswith('SET_PRESSURE_ADVANCE'):
+            match = re.fullmatch(r'SET_PRESSURE_ADVANCE\s+ADVANCE=([+-]?(?:\d+(?:\.\d*)?|\.\d+))',
+                                 text)
+            if match is None:
+                raise ValueError('Only SET_PRESSURE_ADVANCE ADVANCE=<configured K> is supported')
+            advance = float(match[1])
+            if (not math.isfinite(advance) or advance < 0 or self.pressure_advance_s is None or
+                    not math.isclose(advance, self.pressure_advance_s, rel_tol=0, abs_tol=1e-9)):
+                raise ValueError('SET_PRESSURE_ADVANCE must match configured pressure_advance_s')
             return None
         matches = list(WORD.finditer(text))
         if WORD.sub('', text).strip():
@@ -103,7 +119,7 @@ class GCodeParser:
         if any(value is None for value in words.values()):
             raise ValueError('Missing parameter value')
         allowed = {
-            'G0': 'XYZEF', 'G1': 'XYZEF', 'G4': 'PS', 'G20': '', 'G21': '',
+            'G0': 'XYZAEF', 'G1': 'XYZAEF', 'G4': 'PS', 'G20': '', 'G21': '',
             'G90': '', 'G91': '', 'G92': 'XYZE', 'M82': '', 'M83': '',
             'M220': 'S', 'M221': 'S', 'M400': '',
         }
@@ -111,7 +127,7 @@ class GCodeParser:
             if set(words) <= {'F'}:
                 self.set_feed(words)
                 return None
-            code = self.motion
+            code = self.motion or ('G1' if 'A' in words else None)
         if code not in allowed:
             raise ValueError(f'Unsupported command {code or text}')
         unexpected = set(words) - set(allowed[code])
@@ -143,7 +159,8 @@ class GCodeParser:
             if duration < 0:
                 raise ValueError('Dwell must not be negative')
             return ToolpathSegment(tuple(self.position), tuple(self.position), 0.0,
-                                   0.0, 'dwell', number, self.layer, duration)
+                                   0.0, 'dwell', number, self.layer, duration,
+                                   self.pitch, self.pitch)
         elif code in ('G0', 'G1'):
             self.motion = code
             return self.move(words, number, code)
@@ -157,10 +174,13 @@ class GCodeParser:
             self.feed = words['F'] * self.unit / 60
 
     def move(self, words, number, code):
-        """Resolve logical coordinates and emit a spatial or E-only segment."""
+        """Resolve XYZ/E and modal A; A is always an absolute nozzle pitch in degrees."""
         self.set_feed(words)
         start = tuple(self.position)
         previous_e = self.extrusion
+        previous_pitch = self.pitch
+        if 'A' in words:
+            self.pitch = words['A']
         for index, axis in enumerate('XYZ'):
             if axis in words:
                 value = words[axis] * self.unit
@@ -171,15 +191,17 @@ class GCodeParser:
             self.extrusion = value if self.e_absolute else self.extrusion + value
         delta_e = (self.extrusion - previous_e) * self.flow_factor
         length = math.dist(start, self.position)
-        if length < 1e-9 and abs(delta_e) < 1e-9:
+        turning = self.pitch != previous_pitch
+        if length < 1e-9 and abs(delta_e) < 1e-9 and not turning:
             return None
         feed = self.feed
-        if code == 'G0' and feed is None:
+        if feed is None and (code == 'G0' or (length < 1e-9 and delta_e == 0 and turning)):
             feed = self.travel_speed
         if feed is None:
             raise ValueError('Motion requires a preceding or inline F feedrate')
         kind = 'travel' if delta_e == 0 else ('print' if delta_e > 0 else 'retract')
         if length < 1e-9:
-            kind = 'extrude'
+            kind = 'orientation' if turning else 'extrude'
         return ToolpathSegment(start, tuple(self.position), delta_e,
-                               feed * self.speed_factor, kind, number, self.layer)
+                               feed * self.speed_factor, kind, number, self.layer,
+                               start_pitch_deg=previous_pitch, nozzle_pitch_deg=self.pitch)

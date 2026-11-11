@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 import math
 
 import numpy as np
+from spatialmath import SE3
 
 from extrusion_control.extrusion_calibration import (
     MAX_MOVE_STEPS, STEPS_PER_MM, filament_speed_to_steps_s,
@@ -121,7 +122,7 @@ class GCodePlanner(MotionPlanner):
     """Reuse nozzle IK and interpolation checks with joint and TCP constraints."""
 
     def __init__(self, settings, motion_config):
-        """Use the same fixed nozzle orientation in geometry and the executor."""
+        """Start at the configured orientation; G-code A overrides the pitch."""
         settings.validate()
         self.settings = settings
         super().__init__(replace(
@@ -129,6 +130,7 @@ class GCodePlanner(MotionPlanner):
             nozzle_rpy_deg=(settings.nozzle_roll_deg, settings.nozzle_pitch_deg,
                             settings.wrist_angle),
         ))
+        self.pitch_deg = settings.nozzle_pitch_deg
         if (settings.lookahead_enabled and
                 settings.corner_blend_tolerance_mm >= self.config.path_tolerance_mm):
             raise ValueError('corner_blend_tolerance_mm must be less than path_tolerance_mm')
@@ -145,6 +147,11 @@ class GCodePlanner(MotionPlanner):
         if self.bed is not None:
             base[2] = point[2] + self.bed.height(base) + self.settings.bed_z_adjust_mm
         return tuple(base)
+
+    def rotation_for(self, pitch_deg):
+        """Map A directly to nozzle pitch, keeping the configured roll and yaw."""
+        return SE3.RPY((self.settings.nozzle_roll_deg, pitch_deg, self.settings.wrist_angle),
+                       unit='deg', order='zyx').R
 
     def nozzle_jacobian(self, joints):
         """Return the Base-frame Jacobian at the actual nozzle offset."""
@@ -253,14 +260,22 @@ class GCodePlanner(MotionPlanner):
         duration_parts(float(motion.times[-1]))
         return motion
 
-    def sampled_line(self, name, start, end, seed, speed):
-        """Sample a rest-to-rest smoothstep line and verify interpolated geometry."""
+    def sampled_line(self, name, start, end, seed, speed, end_pitch_deg=None,
+                     minimum_duration_s=0.0):
+        """Sample XYZ and pitch together, rotating about the calibrated nozzle tip."""
         start, end = np.asarray(start), np.asarray(end)
         distance = float(np.linalg.norm(end - start))
-        if distance <= 0:
-            raise ValueError('Cannot plan a zero-length spatial segment')
+        start_pitch = self.pitch_deg
+        end_pitch = start_pitch if end_pitch_deg is None else end_pitch_deg
+        pitch_delta = end_pitch - start_pitch
+        if not math.isfinite(pitch_delta):
+            raise ValueError('Pitch change must be finite')
+        if distance <= 0 and pitch_delta == 0:
+            raise ValueError('Cannot plan a zero-length spatial segment without rotation')
         # Smoothstep peak slope is 1.5; bound spatial sample spacing accordingly.
-        intervals = max(4, math.ceil(1.5 * distance / self.config.waypoint_spacing_mm))
+        # One degree also bounds tool0 motion when the nozzle stays at a fixed XYZ.
+        intervals = max(4, math.ceil(1.5 * distance / self.config.waypoint_spacing_mm),
+                        math.ceil(1.5 * abs(pitch_delta)))
         if intervals > 10000:
             raise ValueError(f'{name}: more than 10000 intervals')
         fraction = np.linspace(0, 1, intervals + 1)
@@ -268,19 +283,33 @@ class GCodePlanner(MotionPlanner):
         xyz = start + progress[:, None] * (end - start)
         positions = [np.asarray(seed)]
         self.check_pose(seed, start, start)
-        for point in xyz[1:]:
-            joints = self.solve(point, positions[-1])
+        for point, u in zip(xyz[1:], progress[1:]):
+            rotation = self.rotation_for(start_pitch + u * pitch_delta)
+            joints = self.solve(point, positions[-1], rotation)
             if np.max(np.abs(np.rad2deg(joints - positions[-1]))) > self.config.max_joint_step_deg:
                 raise ValueError(f'{name}: discontinuous IK solution')
             positions.append(joints)
         # F is a peak Cartesian speed, not the average of an accelerating segment.
-        duration = max(1.5 * distance / speed, self.settings.minimum_segment_duration_s)
+        duration = max(1.5 * distance / speed, self.settings.minimum_segment_duration_s,
+                       1.5 * abs(pitch_delta) / self.config.max_joint_speed_deg_s,
+                       minimum_duration_s)
         times = fraction * duration
         positions = np.asarray(positions)
         velocities = np.gradient(positions, times, axis=0)
         velocities[[0, -1]] = 0.0
         motion = self.retime(PlannedMotion(name, positions, velocities, times))
-        self.check_motion(motion, xyz)
+        if pitch_delta:
+            def pose_at(index, fraction):
+                u = (index + fraction) / intervals
+                progress = u**2 * (3 - 2 * u)
+                return (start + progress * (end - start),
+                        self.rotation_for(start_pitch + progress * pitch_delta))
+
+            self.check_motion(motion, pose_at=pose_at)
+        else:
+            self.check_motion(motion, xyz)
+        self.pitch_deg = end_pitch
+        self.rotation = self.rotation_for(end_pitch)
         return motion
 
     def speed_for(self, segment):
@@ -298,12 +327,41 @@ class GCodePlanner(MotionPlanner):
     def plan_segments(self, segments, seed, progress_callback=None):
         """Preflight the entire file, including positioning and a final nozzle lift."""
         cfg = self.settings
+        segments = [replace(
+            segment,
+            start_pitch_deg=(cfg.nozzle_pitch_deg if segment.start_pitch_deg is None
+                             else segment.start_pitch_deg),
+            nozzle_pitch_deg=(cfg.nozzle_pitch_deg if segment.nozzle_pitch_deg is None
+                              else segment.nozzle_pitch_deg),
+        ) for segment in segments]
+        segments = [segment for segment in segments
+                    if not (segment.kind == 'orientation' and segment.delta_e == 0 and
+                            segment.start_pitch_deg == segment.nozzle_pitch_deg)]
+        if cfg.bed_probe_file:
+            # Check every commanded angle, even when the default matched a tilted probe.
+            for pitch in {segment.nozzle_pitch_deg for segment in segments}:
+                BedSurface.load(cfg.bed_probe_file, self.config.tcp_offset_mm,
+                                (cfg.nozzle_roll_deg, pitch, cfg.wrist_angle),
+                                cfg.bed_probe_extrapolation_mm)
+        # Initial travel commands establish the print start. In particular, an initial
+        # Z-hop has no known XY yet; approach above the first XY positioning move.
+        entry_index = 0
+        for index, segment in enumerate(segments):
+            if segment.delta_e != 0 or segment.kind == 'dwell':
+                break
+            if segment.length_mm > 1e-9:
+                entry_index = index
+                if segment.start[:2] != segment.end[:2]:
+                    break
+        segments = segments[entry_index:]
         spatial = [segment for segment in segments if segment.length_mm > 1e-9]
         if not spatial:
             raise ValueError('G-code must contain at least one XYZ movement')
         first = spatial[0]
         # A non-extruding initial move establishes the start, as in the old entry point.
         skip_first = first is segments[0] and first.delta_e == 0
+        self.pitch_deg = first.nozzle_pitch_deg if skip_first else segments[0].start_pitch_deg
+        self.rotation = self.rotation_for(self.pitch_deg)
         if self.bed is not None:
             # Straight robot lines between nearby points follow the curved bed. The skipped
             # entry move starts at the G-code origin and is never executed, so keep it whole.
@@ -338,12 +396,13 @@ class GCodePlanner(MotionPlanner):
                 if segment.kind == 'dwell':
                     steps.append(PlannedStep(transformed, duration_s=segment.dwell_s))
                     continue
-                if segment.length_mm < 1e-9:
+                turning = segment.nozzle_pitch_deg != self.pitch_deg
+                if segment.length_mm < 1e-9 and not turning:
+                    if transformed.delta_e == 0:
+                        continue
                     feed = min(segment.feed_mm_s * cfg.print_speed_multiplier,
                                cfg.max_extrusion_speed_mm_s)
                     speed = math.copysign(filament_speed_to_steps_s(feed), transformed.delta_e)
-                    if transformed.delta_e == 0:
-                        speed = 0.0
                     # The firmware counts these pulses, so transport jitter cannot change
                     # the amount. round() is symmetric: equal retract/unretract cancel.
                     pulses = round(transformed.delta_e * STEPS_PER_MM)
@@ -354,13 +413,14 @@ class GCodePlanner(MotionPlanner):
                     steps.append(PlannedStep(transformed, extrusion_steps_s=speed,
                                              extrusion_steps=pulses, duration_s=duration))
                     continue
-                if cfg.lookahead_enabled:
+                if cfg.lookahead_enabled and not turning:
                     run = [transformed]
                     speeds = [self.speed_for(segment)]
                     skip_until = index + 1
                     while skip_until < len(segments):
                         following = segments[skip_until]
                         if (following.kind == 'dwell' or following.length_mm < 1e-9 or
+                                following.nozzle_pitch_deg != self.pitch_deg or
                                 np.sign(following.delta_e * cfg.extrusion_scale_factor) !=
                                 np.sign(transformed.delta_e)):
                             break
@@ -387,15 +447,21 @@ class GCodePlanner(MotionPlanner):
                     last_point = run[-1].end
                     continue
                 speed = self.speed_for(segment)
-                ratio = abs(transformed.delta_e) / segment.length_mm
+                ratio = (abs(transformed.delta_e) / segment.length_mm
+                         if segment.length_mm > 1e-9 else 0.0)
                 if ratio:
                     speed = min(speed, cfg.max_extrusion_speed_mm_s / ratio)
+                extrusion_speed = (min(segment.feed_mm_s * cfg.print_speed_multiplier,
+                                       cfg.max_extrusion_speed_mm_s)
+                                   if segment.length_mm < 1e-9 else cfg.max_extrusion_speed_mm_s)
                 motion = self.sampled_line(
-                    'print' if transformed.delta_e else 'travel', transformed.start,
-                    transformed.end, joints, speed,
+                    'orientation' if segment.length_mm < 1e-9 else
+                    ('print' if transformed.delta_e else 'travel'), transformed.start,
+                    transformed.end, joints, speed, segment.nozzle_pitch_deg,
+                    1.5 * abs(transformed.delta_e) / extrusion_speed,
                 )
                 extrusion = None
-                if ratio:
+                if transformed.delta_e:
                     duration = float(motion.times[-1])
                     extrusion = self.extrusion_profile(
                         duration, smoothstep_filament(abs(transformed.delta_e), duration),

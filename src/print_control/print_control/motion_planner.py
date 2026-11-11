@@ -118,10 +118,11 @@ class MotionPlanner:
         self.rotation = SE3.RPY(config.nozzle_rpy_deg, unit='deg', order='zyx').R
         self.offset_m = np.asarray(config.tcp_offset_mm) / 1000.0
 
-    def tool_pose(self, nozzle_xyz_mm):
+    def tool_pose(self, nozzle_xyz_mm, rotation=None):
         """Convert a desired nozzle tip location into a tool0 target."""
-        position = np.asarray(nozzle_xyz_mm) / 1000.0 - self.rotation @ self.offset_m
-        return SE3.Rt(self.rotation, position)
+        rotation = self.rotation if rotation is None else rotation
+        position = np.asarray(nozzle_xyz_mm) / 1000.0 - rotation @ self.offset_m
+        return SE3.Rt(rotation, position)
 
     def nozzle_position(self, joints):
         """Return the nozzle tip in Base coordinates (mm)."""
@@ -138,7 +139,7 @@ class MotionPlanner:
         if min_z_mm < self.config.min_link_z_mm:
             raise ValueError('A link origin is below min_link_z_mm')
 
-    def check_pose(self, joints, start, end):
+    def check_pose(self, joints, start, end, rotation=None):
         """Check tip distance to a segment and fixed orientation on the model."""
         pose = self.robot.fkine(joints)
         tip = 1000 * (pose.t + pose.R @ self.offset_m)
@@ -146,25 +147,26 @@ class MotionPlanner:
         norm = float(delta @ delta)
         fraction = np.clip((tip - start) @ delta / norm, 0, 1) if norm else 0.0
         error = np.linalg.norm(tip - (start + fraction * delta))
-        cosine = (np.trace(self.rotation.T @ pose.R) - 1) / 2
+        rotation = self.rotation if rotation is None else rotation
+        cosine = (np.trace(rotation.T @ pose.R) - 1) / 2
         angle = math.degrees(math.acos(np.clip(cosine, -1, 1)))
         if error > self.config.path_tolerance_mm:
             raise ValueError(f'TCP path error {error:.4f} mm exceeds path_tolerance_mm')
         if angle > self.config.orientation_tolerance_deg:
             raise ValueError(f'Orientation error {angle:.4f} deg exceeds tolerance')
 
-    def solve(self, point, seed):
+    def solve(self, point, seed, rotation=None):
         """Solve a nozzle pose and choose joint revolutions near the seed."""
-        result = self.robot.ikine_LM(self.tool_pose(point), q0=seed, joint_limits=True)
+        result = self.robot.ikine_LM(self.tool_pose(point, rotation), q0=seed, joint_limits=True)
         if not result.success:
             raise ValueError(f'IK failed for nozzle XYZ {np.asarray(point).tolist()}')
         # Choose an equivalent revolution close to the previous joint solution.
         joints = seed + (result.q - seed + np.pi) % (2 * np.pi) - np.pi
         self.check_joints(joints)
-        self.check_pose(joints, point, point)
+        self.check_pose(joints, point, point, rotation)
         return joints
 
-    def check_motion(self, motion, xyz=None):
+    def check_motion(self, motion, xyz=None, pose_at=None):
         """Sample cubic geometry; also include each joint's velocity extrema."""
         cfg = self.config
         for index, dt in enumerate(np.diff(motion.times)):
@@ -195,3 +197,6 @@ class MotionPlanner:
                     )
                 if xyz is not None:
                     self.check_pose(q, xyz[index], xyz[index + 1])
+                if pose_at is not None:
+                    point, rotation = pose_at(index, fraction)
+                    self.check_pose(q, point, point, rotation)

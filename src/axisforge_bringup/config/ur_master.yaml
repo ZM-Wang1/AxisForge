@@ -4,23 +4,24 @@ gcode_interpreter:
     origin_at_center: true
     bed_size_mm: [235.0, 235.0]
     # X/Y offset = measured - 235
-    x_offset: -822.13
-    y_offset: -504.78
-    z_offset: 98.20                  # Flat bed height; with a bed probe only bed_probe's guess
+    x_offset: -854.63
+    y_offset: -497.28
+    z_offset: 100.00                  # Flat bed height; with a bed probe only bed_probe's guess
     bed_probe_file: src/axisforge_bringup/config/bed_probe.yaml
     bed_z_adjust_mm: 0.0             # First-layer fine adjust; + raises the nozzle
     bed_probe_extrapolation_mm: 5.0  # Allowed XY distance beyond the probed points
     wrist_angle: 90.0
     nozzle_roll_deg: 180.0
-    nozzle_pitch_deg: 0.0
-    tcp_offset_mm: [-65.73, 3.56, 99.38]
+    nozzle_pitch_deg: 0.0            # Initial pitch; G-code A overrides it in degrees. Probe at 0 deg.
+    tcp_offset_mm: [-100.00, 0.00, 117.06] #119.15
+    # tcp_offset_mm: [-65.73, 3.56, 99.38]
 
     print_speed_multiplier: 1.0
     extrusion_scale_factor: 1.0       # 0 disables extrusion, including E-only moves
     first_layer_speed_factor: 1.0
-    first_layer_height_mm: 0.4       # Fallback only when ;LAYER metadata is absent
-    max_print_speed_mm_s: 100.0      # Limits apply AFTER speed multipliers
-    max_travel_speed_mm_s: 100.0
+    first_layer_height_mm: 0.24       # Fallback only when ;LAYER metadata is absent
+    max_print_speed_mm_s: 120.0      # Limits apply AFTER speed multipliers
+    max_travel_speed_mm_s: 120.0
     max_extrusion_speed_mm_s: 45.0
     minimum_segment_duration_s: 0.10
 
@@ -41,7 +42,7 @@ gcode_interpreter:
     joint_limits_deg: [360.0, 360.0, 180.0, 360.0, 360.0, 360.0]
     min_link_z_mm: -20.0             # Link origins only, not full collision detection
     approach_duration_s: 8.0         # Extended automatically if joint limits require it
-    clearance_mm: 10.0              # Entry approach and final lift along Base +Z
+    clearance_mm: 6.0              # Entry approach and final lift along Base +Z
 
     dry_run_seed_deg: [-3.73, -90.0, -120.0, -60.0, 90.0, 0.0]
     joint_goal_tolerance_rad: 0.001
@@ -51,10 +52,10 @@ gcode_interpreter:
     stall_timeout_s: 2.0
     execution_timeout_factor: 3.0
     cancel_timeout_s: 3.0
-    # Feed-forward E planned with the trajectory at 185.2 steps/mm; pendant speed slider 100 %.
+    # Feed-forward E uses extrusion_calibration.STEPS_PER_MM; pendant speed slider 100 %.
     extrusion_update_period_s: 0.01   # /stepper/speed command period and profile sampling
     extrusion_move_margin_s: 0.10     # Extra wait after firmware-counted E-only moves
-    pressure_advance_s: 0.08          # Klipper pressure_advance K; 0 = E in sync with motion
+    pressure_advance_s: 0.04          # Klipper pressure_advance K; 0 = E in sync with motion
 
     # Explicit compatibility policy: these are externally managed, NOT executed or waited for.
     # Each encountered code is reported. Remove codes to reject them during preflight.
