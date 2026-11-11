@@ -1,5 +1,14 @@
 # AxisForge
 
+## Experimental Klipper follower work
+
+This fork adds an opt-in, hardware-free adapter for experimental Klipper-timed
+toolhead captures. It preserves supplied timing rather than retiming G-code.
+**Live following and synchronized jobs are not implemented or hardware-validated.**
+See [setup, protocol assumptions and live-execution blockers](docs/klipper-follower.md).
+The standalone ROS/Portenta workflow below is unchanged and must not control the
+same job concurrently with Klipper.
+
 ## Repository Layout
 
 ```text
@@ -70,7 +79,7 @@ sudo apt install python3-dev python3-pip python3-venv
 # Install required packages from requirements.txt
 mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
-git clone https://github.com/ZM-Wang1/AxisForge.git
+git clone https://github.com/CrispyButtermilkChickenSalad/AxisForge.git
 cd AxisForge
 # Keep ROS packages visible while installing project dependencies in .venv.
 source /opt/ros/humble/setup.bash
