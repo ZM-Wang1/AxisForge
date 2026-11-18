@@ -1,0 +1,38 @@
+services:
+  dev:
+    build:
+      context: .
+      args:
+        DEV_UID: ${LOCAL_UID:-1000}
+        DEV_GID: ${LOCAL_GID:-1000}
+    init: true
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    # Linux host networking supports ROS DDS discovery and the UR reverse ports.
+    network_mode: host
+    ipc: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+      ROBOT_IP: ${ROBOT_IP:-192.168.0.100}
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+
+  # Optional serial bridge: no board is required to start the dev service.
+  # This provides the Docker equivalent of scripts/microros.sh.
+  micro-ros:
+    image: microros/micro-ros-agent:humble
+    profiles: [hardware]
+    init: true
+    network_mode: host
+    ipc: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+    devices:
+      - "${MICROROS_DEVICE:-/dev/ttyACM0}:/dev/ttyACM0"
+    command: [serial, --dev, /dev/ttyACM0, -b, "${MICROROS_BAUD:-115200}"]

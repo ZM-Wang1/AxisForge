@@ -1,0 +1,5 @@
+# Match the working model environment recorded in scripts/install_ur_models.sh.
+roboticstoolbox-python==1.1.1
+spatialmath-python==1.1.9
+spatialgeometry==1.1.0
+matplotlib==3.5.1

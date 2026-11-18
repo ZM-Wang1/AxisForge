@@ -133,6 +133,29 @@ ros2 launch axisforge_bringup ur_master.launch.py \
   file:="$PWD/src/print_control/gcode/star3d.gcode" dry_run:=true
 ```
 
+### Docker Usage
+
+```bash
+# From the repository root, start the container and build the workspace.
+docker compose up -d --build dev
+docker compose exec dev axisforge-build
+
+# A dry run only needs Terminal 3.
+# Terminal 1: Start the UR16e driver (replace with your robot IP).
+docker compose exec -e ROBOT_IP=192.168.0.100 dev ./scripts/ur_ros2_driver.sh
+
+# Terminal 2: Start the Portenta agent in place of ./scripts/microros.sh.
+# Replace /dev/ttyACM0 with the Portenta's host port. Stop with Ctrl+C before uploading.
+MICROROS_DEVICE=/dev/ttyACM0 docker compose --profile hardware up --force-recreate micro-ros
+
+# Terminal 3: Enter the container. Bash sources the workspace automatically.
+docker compose exec dev bash
+# Replace job.gcode with your file. Use dry_run:=false for hardware execution.
+ros2 launch axisforge_bringup ur_master.launch.py \
+  config:="$PWD/src/axisforge_bringup/config/ur_master.yaml" \
+  file:="$PWD/src/print_control/gcode/job.gcode" dry_run:=true
+```
+
 ### Bed probing
 
 The bed is movable: probe it again every time it is placed. With the UR driver running

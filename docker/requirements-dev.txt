@@ -1,0 +1,5 @@
+# Used by tools/diagnostics/plot_latency_violin.py, but absent from requirements.txt.
+pandas==2.2.3
+seaborn==0.13.2
+# Optional Python debugger; pytest and ROS linters are installed through apt/rosdep.
+debugpy==1.8.14

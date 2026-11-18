@@ -1,0 +1,15 @@
+# Isolate container artifacts from native build/, install/, log/ and .venv/.
+"":
+  log-base: /workspace/.docker/log
+build:
+  build-base: /workspace/.docker/build
+  install-base: /workspace/.docker/install
+  symlink-install: true
+test:
+  build-base: /workspace/.docker/build
+  install-base: /workspace/.docker/install
+  # Existing setup.py files do not declare tests_require=['pytest'].
+  python-testing: pytest
+  return-code-on-test-failure: true
+test-result:
+  test-result-base: /workspace/.docker/build

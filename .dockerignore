@@ -1,0 +1,10 @@
+# Allow only dependency metadata and Docker support files into the build context.
+# Runtime source comes exclusively from the /workspace bind mount.
+**
+!Dockerfile
+!requirements.txt
+!docker/*.sh
+!docker/*.bash
+!docker/*.txt
+!docker/*.yaml
+!src/*/package.xml

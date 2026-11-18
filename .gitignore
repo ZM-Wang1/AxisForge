@@ -60,3 +60,7 @@ __pycache__/
 
 # Local micro-ROS Agent workspace (sources and build artifacts)
 /.micro_ros_ws/
+
+# Docker-only colcon artifacts and local Compose settings
+/.docker/
+/.env
